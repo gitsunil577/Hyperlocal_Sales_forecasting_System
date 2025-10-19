@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import './home.css';
 import Image from 'next/image';
+import Chatbot from './components/chatbot'; // Adjust path as needed
 
 export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
@@ -22,12 +23,14 @@ export default function HomePage() {
       <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
         <div className="nav-container">
           <div className="nav-logo">
-            <span className="logo-icon"><Image 
+            <span className="logo-icon">
+              <Image 
                 src="/Sales_forecast.png" 
                 alt="SalesForecast Logo" 
-                width={40}  // Adjust this
-                height={40} // Adjust this
-              /></span>
+                width={40}
+                height={40}
+              />
+            </span>
             <span className="logo-text">SalesForecast</span>
           </div>
           <div className="nav-links">
@@ -319,6 +322,9 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Chatbot Component */}
+      <Chatbot />
     </div>
   );
 }
