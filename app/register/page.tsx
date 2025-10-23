@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, FormEvent, ChangeEvent } from 'react';
+import  Image from 'next/image';
 import './register.css';
 
 interface FormData {
@@ -140,7 +141,14 @@ export default function RegisterPage() {
 
       <div className="register-container">
         <div className="register-left">
-          <h1>📊 SalesForecast</h1>
+          <span className="logo-icon-large">
+            <Image 
+                src="/forecast.png" 
+                alt="SalesForecast Logo" 
+                width={80}
+                height={80}/>
+                </span>
+          <h1>SalesForecast</h1>
           <p>Join thousands of businesses using AI-powered sales predictions</p>
           
           <div className="benefits">

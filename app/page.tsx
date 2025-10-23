@@ -25,7 +25,7 @@ export default function HomePage() {
           <div className="nav-logo">
             <span className="logo-icon">
               <Image 
-                src="/Sales_forecast.png" 
+                src="/forecast.png" 
                 alt="SalesForecast Logo" 
                 width={40}
                 height={40}
@@ -291,7 +291,13 @@ export default function HomePage() {
           <div className="footer-content">
             <div className="footer-brand">
               <div className="footer-logo">
-                <span className="logo-icon">📊</span>
+                <span className="logo-icon">
+                  <Image 
+                src="/forecast.png" 
+                alt="SalesForecast Logo" 
+                width={40}
+                height={40}
+              /></span>
                 <span className="logo-text">SalesForecast</span>
               </div>
               <p>AI-powered sales prediction and inventory management for modern businesses.</p>
