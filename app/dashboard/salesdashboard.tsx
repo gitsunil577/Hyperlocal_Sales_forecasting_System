@@ -153,13 +153,18 @@ export default function SalesDashboard() {
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         
         {/* Page Title */}
-        
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
+            Smart Inventory Dashboard
+          </h1>
+          
+        </div>
 
         {/* Dashboard Content */}
-        <div className="space-y-6">
+        <div className="space-y-8">
           
           {/* KPI Cards */}
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Predicted Demand"
               value="12,450"
@@ -195,7 +200,7 @@ export default function SalesDashboard() {
           </section>
 
           {/* Forecast + Alerts */}
-          <section className="grid gap-4 xl:grid-cols-3">
+          <section className="grid gap-6 xl:grid-cols-3">
             {/* Daily Demand Forecast */}
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 xl:col-span-2 transition-all duration-300 hover:shadow-lg">
               <div className="flex items-center justify-between mb-6">
@@ -209,8 +214,8 @@ export default function SalesDashboard() {
                 </div>
               </div>
 
-              <div className="h-72 w-full rounded-xl bg-gradient-to-b from-indigo-50 to-white p-4">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="w-full rounded-xl bg-gradient-to-b from-indigo-50 to-white p-4" style={{ height: '300px', minHeight: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={dailyData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="day" stroke="#64748b" style={{ fontSize: '0.875rem' }} />
@@ -247,7 +252,7 @@ export default function SalesDashboard() {
           </section>
 
           {/* External Sources + Quick Actions */}
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 transition-all duration-300 hover:shadow-lg">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">External Data Sources</h2>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -284,8 +289,8 @@ export default function SalesDashboard() {
                 </button>
               </div>
 
-              <div className="w-full h-80 rounded-xl bg-gradient-to-b from-slate-50 to-white p-4">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="w-full rounded-xl bg-gradient-to-b from-slate-50 to-white p-4" style={{ height: '350px', minHeight: '350px' }}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={salesData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="month" stroke="#64748b" style={{ fontSize: '0.875rem' }} />

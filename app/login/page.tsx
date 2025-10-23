@@ -2,6 +2,7 @@
 
 import React, { useState, FormEvent } from 'react';
 import './login.css';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -44,7 +45,14 @@ export default function LoginPage() {
 
       <div className="login-container">
         <div className="login-left">
-          <h1>📊 SalesForecast</h1>
+          <span className="logo-icon-large">
+            <Image 
+                src="/forecast.png" 
+                alt="SalesForecast Logo" 
+                width={80}
+                height={80}/>
+                </span>
+          <h1>SalesForecast</h1>
           <p>Predict your local sales trends with AI-powered analytics and data-driven insights</p>
           <div className="feature-icon">
             <div className="icon">🎯</div>

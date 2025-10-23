@@ -22,7 +22,13 @@ export default function DashboardPage() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <span className="logo-icon">📊</span>
+            <span className="logo-icon"><span className="logo-icon-large">
+            <Image 
+                src="/forecast.png" 
+                alt="SalesForecast Logo" 
+                width={40}
+                height={40}/>
+                </span></span>
             {sidebarOpen && <span className="logo-text">SalesForecast</span>}
           </div>
         </div>
@@ -77,9 +83,6 @@ export default function DashboardPage() {
             ☰
           </button>
           <div className="top-bar-right">
-            <h1 className='text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight'>
-                Smart Inventory Dashboard
-            </h1>
             <div className="search-box">
               <span className="search-icon">🔍</span>
               <input type="text" placeholder="Search..." />
