@@ -3,18 +3,36 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import './dashboard.css';
 import SalesDashboard from "./salesdashboard";
-import { Dispatch, SetStateAction } from 'react';
-
-interface SalesDashboardProps {
-  selectedPeriod: 'week' | 'month' | 'quarter';
-  setSelectedPeriod: Dispatch<SetStateAction<'week' | 'month' | 'quarter'>>;
-}
 
 export default function DashboardPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'quarter'>('month');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const router = useRouter();
+
+  // Logout handler
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    // Clear any stored authentication tokens
+    localStorage.removeItem('authToken');
+    sessionStorage.clear();
+    
+    // You can also call your logout API here
+    // await fetch('/api/auth/logout', { method: 'POST' });
+    
+    // Redirect to home page
+    router.push('/');
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
+  };
 
   return (
     <div className="dashboard-wrapper">
@@ -22,13 +40,16 @@ export default function DashboardPage() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <span className="logo-icon"><span className="logo-icon-large">
-            <Image 
-                src="/forecast.png" 
-                alt="SalesForecast Logo" 
-                width={40}
-                height={40}/>
-                </span></span>
+            <span className="logo-icon">
+              <span className="logo-icon-large">
+                <Image 
+                  src="/forecast.png" 
+                  alt="SalesForecast Logo" 
+                  width={40}
+                  height={40}
+                />
+              </span>
+            </span>
             {sidebarOpen && <span className="logo-text">SalesForecast</span>}
           </div>
         </div>
@@ -65,10 +86,11 @@ export default function DashboardPage() {
             <span className="nav-icon">👤</span>
             {sidebarOpen && <span>Profile</span>}
           </Link>
-          <Link href="/logout" className="nav-item">
+          {/* Logout button with onClick handler */}
+          <button onClick={handleLogout} className="nav-item logout-btn">
             <span className="nav-icon">🚪</span>
             {sidebarOpen && <span>Logout</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -103,9 +125,8 @@ export default function DashboardPage() {
 
         {/* Sales Dashboard Component */}
         <div className="sales-dashboard-container">
-    <SalesDashboard/>
+          <SalesDashboard />
         </div>
-        
       </main>
     </div>
   );

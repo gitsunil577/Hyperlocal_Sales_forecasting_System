@@ -12,6 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import "./salesdashboard.css"; // Import the CSS file
 
 /** ---------- Small UI helpers ---------- */
 const Badge = ({ children }: { children: React.ReactNode }) => (
@@ -157,7 +158,6 @@ export default function SalesDashboard() {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
             Smart Inventory Dashboard
           </h1>
-          
         </div>
 
         {/* Dashboard Content */}
