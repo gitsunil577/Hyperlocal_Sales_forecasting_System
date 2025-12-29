@@ -1,38 +1,47 @@
-'use client';
+"use client";
 
-import React, { useState, FormEvent } from 'react';
-import './login.css';
-import Image from 'next/image';
+import React, { useState, FormEvent, useMemo } from "react";
+import "./login.css";
+import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
+import { loginClient } from "../../../lib/auth-client";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const next = useMemo(() => {
+    const n = searchParams.get("next");
+    return n && n.startsWith("/") ? n : null;
+  }, [searchParams]);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
-    // Simulate API call
-    setTimeout(() => {
-      alert('Login functionality would be implemented here!');
+    try {
+      const res = await loginClient(email, password);
+
+      if (!res.ok) {
+        setError("Invalid email or password.");
+        return;
+      }
+
+      // Redirect based on role
+      if (res.role === "admin") router.push("/admin");
+      else router.push(next ?? "/dashboard");
+    } catch (err) {
+      console.error(err);
+      setError("Login failed. Please try again.");
+    } finally {
       setIsLoading(false);
-    }, 1500);
-
-    // Your actual login logic would go here:
-    // try {
-    //   const response = await fetch('/api/auth/login', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email, password })
-    //   });
-    //   const data = await response.json();
-    //   // Handle successful login
-    // } catch (error) {
-    //   console.error('Login error:', error);
-    // } finally {
-    //   setIsLoading(false);
-    // }
+    }
   };
 
   return (
@@ -46,14 +55,14 @@ export default function LoginPage() {
       <div className="login-container">
         <div className="login-left">
           <span className="logo-icon-large">
-            <Image 
-                src="/forecast.png" 
-                alt="SalesForecast Logo" 
-                width={80}
-                height={80}/>
-                </span>
+            <Image src="/forecast.png" alt="SalesForecast Logo" width={80} height={80} />
+          </span>
+
           <h1>SalesForecast</h1>
-          <p>Predict your local sales trends with AI-powered analytics and data-driven insights</p>
+          <p>
+            Predict your local sales trends with AI-powered analytics and data-driven insights
+          </p>
+
           <div className="feature-icon">
             <div className="icon">🎯</div>
             <span>Accurate Predictions</span>
@@ -66,6 +75,11 @@ export default function LoginPage() {
             <div className="icon">📈</div>
             <span>Real-Time Analytics</span>
           </div>
+
+          <div style={{ marginTop: 18, fontSize: 12, opacity: 0.9 }}>
+            <div><b>Frontend phase:</b> email containing “admin” logs in as Admin.</div>
+            <div>Example: <i>admin@company.com</i></div>
+          </div>
         </div>
 
         <div className="login-right">
@@ -73,6 +87,21 @@ export default function LoginPage() {
           <p className="subtitle">Enter your credentials to access your dashboard</p>
 
           <form onSubmit={handleSubmit}>
+            {error && (
+              <div style={{
+                background: "#fee2e2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                padding: "10px 12px",
+                borderRadius: 12,
+                fontSize: 14,
+                marginBottom: 14,
+                fontWeight: 600,
+              }}>
+                {error}
+              </div>
+            )}
+
             <div className="input-group">
               <label htmlFor="email">Email Address</label>
               <input
@@ -82,6 +111,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
 
@@ -94,6 +124,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
               />
             </div>
 
@@ -102,13 +133,13 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" className="login-btn" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? "Signing in..." : "Sign In"}
             </button>
 
             <div className="divider">OR</div>
 
             <div className="signup-link">
-              Don't have an account? <a href="/register">Sign up now</a>
+              Don&apos;t have an account? <a href="/register">Sign up now</a>
             </div>
           </form>
         </div>
