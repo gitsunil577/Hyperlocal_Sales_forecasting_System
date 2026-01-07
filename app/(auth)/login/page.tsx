@@ -33,9 +33,14 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect based on role
-      if (res.role === "admin") router.push("/admin");
-      else router.push(next ?? "/dashboard");
+      // ✅ Set cookies for middleware (1 day)
+      document.cookie = `sf_token=1; path=/; max-age=86400; samesite=lax`;
+      document.cookie = `sf_role=${res.role}; path=/; max-age=86400; samesite=lax`;
+
+      // ✅ Redirect: if "next" exists, respect it, else role home
+      const roleHome = res.role === "admin" ? "/admin" : "/dashboard";
+      router.push(next ?? roleHome);
+
     } catch (err) {
       console.error(err);
       setError("Login failed. Please try again.");

@@ -30,8 +30,41 @@ type HistoryEntry = {
 };
 
 const HISTORY_KEY = "sf_sales_history_v1";
+const SETTINGS_KEY = "sf_admin_settings_v1";
 
 type Horizon = 7 | 14 | 30;
+
+type AdminSettings = {
+  orgName: string;
+
+  defaultForecastHorizon: Horizon;
+  leadTimeDays: number;
+  safetyDays: number;
+
+  defaultReorderPoint: number;
+  lowStockAlertsEnabled: boolean;
+
+  showConfidence: boolean;
+  showSuggestions: boolean;
+
+  vendorApprovalMode: "auto" | "manual";
+};
+
+const DEFAULT_SETTINGS: AdminSettings = {
+  orgName: "SalesForecast",
+
+  defaultForecastHorizon: 7,
+  leadTimeDays: 3,
+  safetyDays: 2,
+
+  defaultReorderPoint: 10,
+  lowStockAlertsEnabled: true,
+
+  showConfidence: true,
+  showSuggestions: true,
+
+  vendorApprovalMode: "auto",
+};
 
 function parseISO(d: string) {
   return new Date(d + "T00:00:00");
@@ -88,7 +121,7 @@ function buildMockForecast(lastDate: string, horizon: Horizon, baselineUnits: nu
     // weekday bump (weekend higher)
     const weekdayBump = weekday === 0 || weekday === 6 ? 1.12 : 1.0;
 
-    // random noise (stable-ish)
+    // stable-ish noise
     const noise = (Math.sin(i * 1.7) + 1) * 0.03; // 0..0.06
 
     const predicted = Math.round(base * trendFactor * weekdayBump * (1 + noise));
@@ -112,10 +145,30 @@ function buildMockForecast(lastDate: string, horizon: Horizon, baselineUnits: nu
 }
 
 export default function ForecastPage() {
-  const [horizon, setHorizon] = useState<Horizon>(7);
+  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
+  const [horizon, setHorizon] = useState<Horizon>(DEFAULT_SETTINGS.defaultForecastHorizon);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
+  // Load Admin Settings + Sales History
   useEffect(() => {
+    // Settings
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object") {
+        const merged: AdminSettings = { ...DEFAULT_SETTINGS, ...parsed };
+        setSettings(merged);
+        setHorizon(merged.defaultForecastHorizon || 7);
+      } else {
+        setSettings(DEFAULT_SETTINGS);
+        setHorizon(DEFAULT_SETTINGS.defaultForecastHorizon);
+      }
+    } catch {
+      setSettings(DEFAULT_SETTINGS);
+      setHorizon(DEFAULT_SETTINGS.defaultForecastHorizon);
+    }
+
+    // History
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
@@ -131,7 +184,9 @@ export default function ForecastPage() {
 
     // last 7 recorded days baseline
     const last7 = sorted.slice(-7).map((e) => e.totalUnits || 0);
-    const baselineUnits = Math.round(mean(last7.length ? last7 : sorted.map((e) => e.totalUnits || 0)));
+    const baselineUnits = Math.round(
+      mean(last7.length ? last7 : sorted.map((e) => e.totalUnits || 0))
+    );
 
     // Top products (by units) in last 14 records
     const productAgg = new Map<string, { name: string; units: number }>();
@@ -139,7 +194,10 @@ export default function ForecastPage() {
       entry.items.forEach((it) => {
         const key = it.productId || it.productName;
         const prev = productAgg.get(key) || { name: it.productName, units: 0 };
-        productAgg.set(key, { name: it.productName, units: prev.units + (it.quantity || 0) });
+        productAgg.set(key, {
+          name: it.productName,
+          units: prev.units + (it.quantity || 0),
+        });
       });
     });
 
@@ -167,8 +225,11 @@ export default function ForecastPage() {
       forecast[0] ?? { predicted: 0, date: "" }
     );
 
-    // suggested reorder qty = max day predicted - baseline
-    const reorder = Math.max(0, Math.round(maxDay.predicted * 1.05 - (recentStats.baselineUnits || 0)));
+    // suggested reorder qty = peak predicted - baseline (simple UI rule)
+    const reorder = Math.max(
+      0,
+      Math.round(maxDay.predicted * 1.05 - (recentStats.baselineUnits || 0))
+    );
 
     // overall confidence average
     const confidenceAvg = forecast.length
@@ -185,13 +246,18 @@ export default function ForecastPage() {
     };
   }, [forecast, recentStats.baselineUnits]);
 
+  const showConfidence = settings.showConfidence;
+  const showSuggestions = settings.showSuggestions;
+
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a" }}>Demand Forecast</h1>
           <p style={{ marginTop: 6, color: "#64748b", fontWeight: 600 }}>
-            Forecast for next {horizon} days with confidence band + suggestions.
+            Forecast for next {horizon} days{" "}
+            {showConfidence ? "with confidence band" : ""}{" "}
+            {showSuggestions ? "+ suggestions" : ""}.
           </p>
         </div>
 
@@ -202,79 +268,151 @@ export default function ForecastPage() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div style={{ marginTop: 16, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        <KPI title="Total Predicted Units" value={`${summary.total}`} subtitle={`Next ${horizon} days`} />
-        <KPI title="Avg Daily Demand" value={`${summary.avg.toFixed(1)}`} subtitle="Units/day" />
-        <KPI title="Peak Day" value={`${fmtShort(summary.maxDay.date)} • ${summary.maxDay.predicted}`} subtitle="Highest predicted units" />
-        <KPI title="Confidence" value={`${Math.round(summary.confidenceAvg * 100)}%`} subtitle="Avg model confidence" />
-      </div>
+      {/* If no history */}
+      {history.length === 0 ? (
+        <div
+          style={{
+            marginTop: 16,
+            background: "white",
+            borderRadius: 16,
+            padding: 16,
+            boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+            color: "#64748b",
+            fontWeight: 800,
+          }}
+        >
+          No sales history found. Add entries in “Daily Sales Entry” to generate a meaningful forecast.
+        </div>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div
+            style={{
+              marginTop: 16,
+              display: "grid",
+              gap: 14,
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            }}
+          >
+            <KPI title="Total Predicted Units" value={`${summary.total}`} subtitle={`Next ${horizon} days`} />
+            <KPI title="Avg Daily Demand" value={`${summary.avg.toFixed(1)}`} subtitle="Units/day" />
+            <KPI
+              title="Peak Day"
+              value={`${fmtShort(summary.maxDay.date)} • ${summary.maxDay.predicted}`}
+              subtitle="Highest predicted units"
+            />
+            {showConfidence && (
+              <KPI
+                title="Confidence"
+                value={`${Math.round(summary.confidenceAvg * 100)}%`}
+                subtitle="Avg model confidence"
+              />
+            )}
+          </div>
 
-      {/* Chart + Suggestions */}
-      <div style={{ marginTop: 16, display: "grid", gap: 16, gridTemplateColumns: "repeat(12, 1fr)" }}>
-        <Card title="Forecast Trend" subtitle="Predicted demand with confidence band" colSpan={8}>
-          <div style={{ height: 360 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={forecast}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={fmtShort} />
-                <YAxis />
-                <Tooltip
-                  formatter={(value: any, name: any) => [value, name]}
-                  labelFormatter={(label) => `Date: ${label}`}
+          {/* Chart + Suggestions */}
+          <div
+            style={{
+              marginTop: 16,
+              display: "grid",
+              gap: 16,
+              gridTemplateColumns: "repeat(12, 1fr)",
+            }}
+          >
+            <Card
+              title="Forecast Trend"
+              subtitle={
+                showConfidence
+                  ? "Predicted demand with confidence band"
+                  : "Predicted demand (confidence hidden by admin settings)"
+              }
+              colSpan={showSuggestions ? 8 : 12}
+            >
+              <div style={{ height: 360 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={forecast}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tickFormatter={fmtShort} />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any, name: any) => [value, name]}
+                      labelFormatter={(label) => `Date: ${label}`}
+                    />
+                    <Legend />
+
+                    {/* Confidence band (optional) */}
+                    {showConfidence && (
+                      <>
+                        <Area type="monotone" dataKey="upper" strokeWidth={0} fillOpacity={0.15} />
+                        <Area type="monotone" dataKey="lower" strokeWidth={0} fillOpacity={0.15} />
+                      </>
+                    )}
+
+                    {/* Main line */}
+                    <Area type="monotone" dataKey="predicted" strokeWidth={3} fillOpacity={0.25} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Pill text={`Baseline (recent avg): ${recentStats.baselineUnits || 0} units/day`} />
+                <Pill text={`Lowest: ${fmtShort(summary.minDay.date)} (${summary.minDay.predicted})`} />
+                <Pill text={`Highest: ${fmtShort(summary.maxDay.date)} (${summary.maxDay.predicted})`} />
+              </div>
+            </Card>
+
+            {showSuggestions && (
+              <Card title="Smart Suggestions" subtitle="Actionable recommendations" colSpan={4}>
+                <Suggestion
+                  title="Reorder suggestion"
+                  desc={`Consider stocking ~${summary.reorder} extra units to safely handle peak demand. Use Inventory → Suggested Reorder for per-product quantities.`}
+                  tone="indigo"
                 />
-                <Legend />
-                {/* Confidence band */}
-                <Area type="monotone" dataKey="upper" strokeWidth={0} fillOpacity={0.15} />
-                <Area type="monotone" dataKey="lower" strokeWidth={0} fillOpacity={0.15} />
-                {/* Main line */}
-                <Area type="monotone" dataKey="predicted" strokeWidth={3} fillOpacity={0.25} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+                <Suggestion
+                  title="Peak-day readiness"
+                  desc={`Prepare for highest demand around ${fmtShort(summary.maxDay.date)}.`}
+                  tone="emerald"
+                />
+                <Suggestion
+                  title="Planning window"
+                  desc={`Admin settings: lead time ${settings.leadTimeDays}d + safety ${settings.safetyDays}d buffer. This affects reorder suggestions.`}
+                  tone="amber"
+                />
 
-          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Pill text={`Baseline (recent avg): ${recentStats.baselineUnits || 0} units/day`} />
-            <Pill text={`Lowest: ${fmtShort(summary.minDay.date)} (${summary.minDay.predicted})`} />
-            <Pill text={`Highest: ${fmtShort(summary.maxDay.date)} (${summary.maxDay.predicted})`} />
-          </div>
-        </Card>
-
-        <Card title="Smart Suggestions" subtitle="Actionable recommendations" colSpan={4}>
-          <Suggestion
-            title="Reorder suggestion"
-            desc={`Consider stocking ~${summary.reorder} extra units to safely handle peak demand.`}
-            tone="indigo"
-          />
-          <Suggestion
-            title="Peak-day readiness"
-            desc={`Prepare for highest demand around ${fmtShort(summary.maxDay.date)}.`}
-            tone="emerald"
-          />
-          <Suggestion
-            title="Risk / uncertainty"
-            desc={`Confidence reduces with longer horizons. Use 7-day view for tighter planning.`}
-            tone="amber"
-          />
-
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>Top products (recent)</div>
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-              {(recentStats.topProducts.length ? recentStats.topProducts : [{ name: "—", units: 0 }]).map((p, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, color: "#334155" }}>
-                  <span>{p.name}</span>
-                  <span>{p.units}</span>
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>
+                    Top products (recent)
+                  </div>
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {(recentStats.topProducts.length
+                      ? recentStats.topProducts
+                      : [{ name: "—", units: 0 }]
+                    ).map((p, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontWeight: 800,
+                          color: "#334155",
+                        }}
+                      >
+                        <span>{p.name}</span>
+                        <span>{p.units}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              </Card>
+            )}
           </div>
-        </Card>
-      </div>
 
-      {/* Footer note */}
-      <div style={{ marginTop: 16, color: "#64748b", fontWeight: 700, fontSize: 12 }}>
-        Note: Forecast is currently generated on the frontend for UI development. Later it will come from your ML backend.
-      </div>
+          {/* Footer note */}
+          <div style={{ marginTop: 16, color: "#64748b", fontWeight: 700, fontSize: 12 }}>
+            Note: Forecast is currently generated on the frontend for UI development. Later it will come from your ML backend.
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -309,8 +447,17 @@ function HorizonButton({
 
 function KPI({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (
-    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
-      <div style={{ color: "#64748b", fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>{title}</div>
+    <div
+      style={{
+        background: "white",
+        borderRadius: 16,
+        padding: 16,
+        boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+      }}
+    >
+      <div style={{ color: "#64748b", fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>
+        {title}
+      </div>
       <div style={{ marginTop: 10, fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{value}</div>
       <div style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>{subtitle}</div>
     </div>
@@ -383,9 +530,19 @@ function Suggestion({
   const t = toneMap[tone];
 
   return (
-    <div style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 16, padding: 12, marginTop: 10 }}>
+    <div
+      style={{
+        background: t.bg,
+        border: `1px solid ${t.border}`,
+        borderRadius: 16,
+        padding: 12,
+        marginTop: 10,
+      }}
+    >
       <div style={{ fontWeight: 900, color: t.title }}>{title}</div>
-      <div style={{ marginTop: 6, color: "#334155", fontWeight: 700, fontSize: 13, lineHeight: 1.5 }}>{desc}</div>
+      <div style={{ marginTop: 6, color: "#334155", fontWeight: 700, fontSize: 13, lineHeight: 1.5 }}>
+        {desc}
+      </div>
     </div>
   );
 }

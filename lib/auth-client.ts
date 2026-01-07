@@ -45,4 +45,8 @@ export function logoutClient() {
   clearCookie("sf_token");
   clearCookie("sf_role");
   clearCookie("sf_user");
+
+  // Optional: clear local/session storage if used later
+  localStorage.clear();
+  sessionStorage.clear();
 }
