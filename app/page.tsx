@@ -34,13 +34,20 @@ export default function HomePage() {
             <span className="logo-text">SalesForecast</span>
           </div>
           <div className="nav-links">
-            <a href="#features">Features</a>
-            <a href="#how-it-works">How It Works</a>
-            <a href="#pricing">Pricing</a>
-            <Link href="/login" className="nav-login-btn">
-              Login
-            </Link>
-          </div>
+  <a href="#features">Features</a>
+  <a href="#how-it-works">How It Works</a>
+  <a href="#pricing">Pricing</a>
+
+  {/* NEW: Dashboard Link */}
+  <Link href="/dashboard" className="nav-dashboard-btn">
+    Dashboard
+  </Link>
+
+  <Link href="/login" className="nav-login-btn">
+    Login
+  </Link>
+</div>
+
         </div>
       </nav>
 
@@ -64,13 +71,15 @@ export default function HomePage() {
             reduce waste, and maximize profits with location-based forecasting tailored to your business.
           </p>
           <div className="hero-buttons">
-            <Link href="/register" className="btn btn-primary">
-              Get Started Free
-            </Link>
-            <Link href="/login" className="btn btn-secondary">
-              Sign In
-            </Link>
-          </div>
+  <Link href="/dashboard" className="btn btn-primary">
+    Go to Dashboard →
+  </Link>
+
+  <Link href="/register" className="btn btn-secondary">
+    Get Started Free
+  </Link>
+</div>
+
           <div className="hero-stats">
             <div className="stat-item">
               <div className="stat-number">95%</div>
