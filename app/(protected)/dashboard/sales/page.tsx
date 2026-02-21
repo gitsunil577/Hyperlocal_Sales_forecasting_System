@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiClient } from "@/lib/api-client";
+import { getDisplayName } from "@/lib/product-mapping";
 
 type SaleRow = {
   id: string;
@@ -10,7 +13,8 @@ type SaleRow = {
   unitPrice: number;
 };
 
-const PRODUCT_CATALOG = [
+// Fallback catalog; will be replaced by backend product families on load
+const FALLBACK_CATALOG = [
   { id: "p1", name: "Milk (1L)" },
   { id: "p2", name: "Bread" },
   { id: "p3", name: "Eggs (12)" },
@@ -33,12 +37,32 @@ function todayISO() {
 const DRAFT_KEY = "sf_daily_sales_draft_v1";
 
 export default function DailySalesEntryPage() {
+  const router = useRouter();
   const [saleDate, setSaleDate] = useState<string>(todayISO());
   const [rows, setRows] = useState<SaleRow[]>([
     { id: uid(), productId: "", productName: "", quantity: 1, unitPrice: 0 },
   ]);
   const [note, setNote] = useState<string>("");
   const [status, setStatus] = useState<string>("");
+  const [submitted, setSubmitted] = useState(false);
+  const [productCatalog, setProductCatalog] = useState(FALLBACK_CATALOG);
+
+  // Load product catalog from backend
+  useEffect(() => {
+    apiClient.getProducts()
+      .then((resp) => {
+        if (resp.products && resp.products.length > 0) {
+          const catalog = resp.products.map((family: string, idx: number) => ({
+            id: `pf_${idx}`,
+            name: getDisplayName(family),
+          }));
+          setProductCatalog(catalog);
+        }
+      })
+      .catch(() => {
+        // fallback to hardcoded catalog if backend not available
+      });
+  }, []);
 
   // Load draft
   useEffect(() => {
@@ -77,7 +101,7 @@ export default function DailySalesEntryPage() {
   };
 
   const onSelectProduct = (id: string, productId: string) => {
-    const prod = PRODUCT_CATALOG.find((p) => p.id === productId);
+    const prod = productCatalog.find((p) => p.id === productId);
     updateRow(id, { productId, productName: prod?.name ?? "" });
   };
 
@@ -104,20 +128,13 @@ export default function DailySalesEntryPage() {
     setTimeout(() => setStatus(""), 2000);
   };
 
-  const submit = async () => {
-  const err = validate();
-  if (err) {
-    setStatus(err);
-    return;
-  }
+  const submit = () => {
+    const err = validate();
+    if (err) {
+      setStatus(err);
+      return;
+    }
 
-  setStatus("Submitting...");
-
-  try {
-    // ✅ Later: Replace with real API call
-    await new Promise((r) => setTimeout(r, 900));
-
-    // ✅ Save into history ONLY after successful submit
     const HISTORY_KEY = "sf_sales_history_v1";
 
     let existing: any[] = [];
@@ -144,35 +161,64 @@ export default function DailySalesEntryPage() {
     };
 
     localStorage.setItem(HISTORY_KEY, JSON.stringify([entry, ...existing]));
-
-    console.log("SUBMIT DAILY SALES", { saleDate, rows, note });
-
     localStorage.removeItem(DRAFT_KEY);
-    setStatus("Submitted successfully ✅");
 
-    // Reset form
+    // Reset form and show success
     setRows([{ id: uid(), productId: "", productName: "", quantity: 1, unitPrice: 0 }]);
     setNote("");
     setSaleDate(todayISO());
-
-    setTimeout(() => setStatus(""), 2500);
-  } catch (e) {
-    setStatus("Submission failed. Please try again.");
-  }
-};
+    setSubmitted(true);
+    setStatus("");
+  };
 
 
   return (
     <div style={{ padding: 24 }}>
+      {/* Success Banner */}
+      {submitted && (
+        <div style={{
+          marginBottom: 20, padding: "16px 20px", borderRadius: 12,
+          background: "#ecfdf5", border: "1px solid #a7f3d0",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>&#10003;</span>
+            <span style={{ fontWeight: 700, color: "#065f46", fontSize: 14 }}>Sales entry submitted successfully!</span>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/history")}
+              style={{
+                padding: "7px 16px", borderRadius: 8, border: "none",
+                background: "#059669", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              }}
+            >
+              View in History
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubmitted(false)}
+              style={{
+                padding: "7px 16px", borderRadius: 8, border: "1px solid #a7f3d0",
+                background: "transparent", color: "#065f46", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a" }}>Add Daily Sales</h1>
-          <p style={{ marginTop: 6, color: "#64748b" }}>
-            Enter today’s sales as line items. You can add multiple products in one submission.
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Add Daily Sales</h1>
+          <p style={{ marginTop: 4, fontSize: 14, color: "#94a3b8", fontWeight: 500 }}>
+            Enter today&apos;s sales as line items. You can add multiple products in one submission.
           </p>
         </div>
 
-        <div style={{ minWidth: 260, background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
+        <div style={{ minWidth: 260, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
           <div style={{ fontWeight: 800, color: "#0f172a" }}>Summary</div>
           <div style={{ marginTop: 10, color: "#334155", fontWeight: 600 }}>Total Units: {totals.totalUnits}</div>
           <div style={{ marginTop: 6, color: "#334155", fontWeight: 600 }}>Total Amount: ₹ {totals.grandTotal.toFixed(2)}</div>
@@ -183,7 +229,7 @@ export default function DailySalesEntryPage() {
       </div>
 
       <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 900 }}>
-        <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
           <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155" }}>Sale Date</label>
           <input
             type="date"
@@ -200,7 +246,7 @@ export default function DailySalesEntryPage() {
           />
         </div>
 
-        <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
+        <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
           <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155" }}>Note (optional)</label>
           <input
             value={note}
@@ -218,7 +264,7 @@ export default function DailySalesEntryPage() {
         </div>
       </div>
 
-      <div style={{ marginTop: 16, background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
+      <div style={{ marginTop: 16, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Line Items</h2>
           <button
@@ -266,7 +312,7 @@ export default function DailySalesEntryPage() {
                       }}
                     >
                       <option value="">Select product</option>
-                      {PRODUCT_CATALOG.map((p) => (
+                      {productCatalog.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
                         </option>
@@ -372,7 +418,7 @@ export default function DailySalesEntryPage() {
               background: "#4f46e5",
               color: "white",
               padding: "12px 14px",
-              fontWeight: 900,
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >

@@ -1,12 +1,20 @@
 "use client";
 
-import React, { useState, FormEvent, useMemo } from "react";
+import React, { Suspense, useState, FormEvent, useMemo } from "react";
 import "./login.css";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { loginClient } from "../../../lib/auth-client";
+import { signIn, getSession } from "next-auth/react";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 48, textAlign: "center" }}>Loading...</div>}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -26,19 +34,19 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await loginClient(email, password);
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-      if (!res.ok) {
+      if (!result?.ok || result?.error) {
         setError("Invalid email or password.");
         return;
       }
 
-      // ✅ Set cookies for middleware (1 day)
-      document.cookie = `sf_token=1; path=/; max-age=86400; samesite=lax`;
-      document.cookie = `sf_role=${res.role}; path=/; max-age=86400; samesite=lax`;
-
-      // ✅ Redirect: if "next" exists, respect it, else role home
-      const roleHome = res.role === "admin" ? "/admin" : "/dashboard";
+      const session = await getSession();
+      const roleHome = session?.user?.role === "admin" ? "/admin" : "/dashboard";
       router.push(next ?? roleHome);
 
     } catch (err) {
@@ -68,22 +76,24 @@ export default function LoginPage() {
             Predict your local sales trends with AI-powered analytics and data-driven insights
           </p>
 
-          <div className="feature-icon">
-            <div className="icon">🎯</div>
-            <span>Accurate Predictions</span>
-          </div>
-          <div className="feature-icon">
-            <div className="icon">📍</div>
-            <span>Location-Based Insights</span>
-          </div>
-          <div className="feature-icon">
-            <div className="icon">📈</div>
-            <span>Real-Time Analytics</span>
+          <div className="features-list">
+            <div className="feature-icon">
+              <div className="icon">🎯</div>
+              <span>Accurate Predictions</span>
+            </div>
+            <div className="feature-icon">
+              <div className="icon">📍</div>
+              <span>Location-Based Insights</span>
+            </div>
+            <div className="feature-icon">
+              <div className="icon">📈</div>
+              <span>Real-Time Analytics</span>
+            </div>
           </div>
 
           <div style={{ marginTop: 18, fontSize: 12, opacity: 0.9 }}>
-            <div><b>Frontend phase:</b> email containing “admin” logs in as Admin.</div>
-            <div>Example: <i>admin@company.com</i></div>
+            <div>Register an account to get started.</div>
+            <div>Emails containing "admin" are assigned the Admin role.</div>
           </div>
         </div>
 
@@ -133,18 +143,15 @@ export default function LoginPage() {
               />
             </div>
 
-            <div className="forgot-password">
-              <a href="/forgot-password">Forgot Password?</a>
-            </div>
-
             <button type="submit" className="login-btn" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Sign In"}
             </button>
 
-            <div className="divider">OR</div>
-
-            <div className="signup-link">
-              Don&apos;t have an account? <a href="/register">Sign up now</a>
+            <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#64748b" }}>
+              Don&apos;t have an account?{" "}
+              <a href="/register" style={{ color: "#6366f1", fontWeight: 600, textDecoration: "none" }}>
+                Sign up
+              </a>
             </div>
           </form>
         </div>

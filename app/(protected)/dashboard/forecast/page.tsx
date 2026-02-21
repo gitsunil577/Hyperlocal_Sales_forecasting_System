@@ -11,253 +11,99 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-type HistoryItem = {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-};
-
-type HistoryEntry = {
-  id: number;
-  saleDate: string; // YYYY-MM-DD
-  note?: string;
-  items: HistoryItem[];
-  totalUnits: number;
-  totalAmount: number;
-};
-
-const HISTORY_KEY = "sf_sales_history_v1";
-const SETTINGS_KEY = "sf_admin_settings_v1";
+import { apiClient } from "@/lib/api-client";
+import { useForecast } from "@/lib/hooks/useForecast";
+import { getDisplayName } from "@/lib/product-mapping";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+import ErrorBanner from "@/app/components/ErrorBanner";
 
 type Horizon = 7 | 14 | 30;
-
-type AdminSettings = {
-  orgName: string;
-
-  defaultForecastHorizon: Horizon;
-  leadTimeDays: number;
-  safetyDays: number;
-
-  defaultReorderPoint: number;
-  lowStockAlertsEnabled: boolean;
-
-  showConfidence: boolean;
-  showSuggestions: boolean;
-
-  vendorApprovalMode: "auto" | "manual";
-};
-
-const DEFAULT_SETTINGS: AdminSettings = {
-  orgName: "SalesForecast",
-
-  defaultForecastHorizon: 7,
-  leadTimeDays: 3,
-  safetyDays: 2,
-
-  defaultReorderPoint: 10,
-  lowStockAlertsEnabled: true,
-
-  showConfidence: true,
-  showSuggestions: true,
-
-  vendorApprovalMode: "auto",
-};
-
-function parseISO(d: string) {
-  return new Date(d + "T00:00:00");
-}
-function toISO(date: Date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-function addDaysISO(iso: string, n: number) {
-  const d = parseISO(iso);
-  d.setDate(d.getDate() + n);
-  return toISO(d);
-}
-function fmtShort(iso: string) {
-  return parseISO(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short" });
-}
-
-function mean(nums: number[]) {
-  if (!nums.length) return 0;
-  return nums.reduce((a, b) => a + b, 0) / nums.length;
-}
-
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
-
-/**
- * Mock forecast generator:
- * - uses recent daily units average from history as baseline
- * - adds gentle trend + weekday noise
- * - produces confidence band
- * Later: replace with real forecast API.
- */
-function buildMockForecast(lastDate: string, horizon: Horizon, baselineUnits: number) {
-  const rows: Array<{
-    date: string;
-    predicted: number;
-    lower: number;
-    upper: number;
-    confidence: number; // 0..1
-  }> = [];
-
-  const base = Math.max(1, Math.round(baselineUnits || 20));
-
-  for (let i = 1; i <= horizon; i++) {
-    const date = addDaysISO(lastDate, i);
-    const weekday = parseISO(date).getDay(); // 0 Sun .. 6 Sat
-
-    // mild trend: +0.2% per day
-    const trendFactor = 1 + i * 0.002;
-
-    // weekday bump (weekend higher)
-    const weekdayBump = weekday === 0 || weekday === 6 ? 1.12 : 1.0;
-
-    // stable-ish noise
-    const noise = (Math.sin(i * 1.7) + 1) * 0.03; // 0..0.06
-
-    const predicted = Math.round(base * trendFactor * weekdayBump * (1 + noise));
-
-    // confidence: decreases slightly as horizon increases
-    const confidence = clamp(0.92 - i * 0.008, 0.65, 0.92);
-
-    // band width grows as confidence drops
-    const band = Math.round(predicted * (1 - confidence) * 1.4);
-
-    rows.push({
-      date,
-      predicted,
-      lower: Math.max(0, predicted - band),
-      upper: predicted + band,
-      confidence,
-    });
-  }
-
-  return rows;
-}
+type ModelType = "arima" | "prophet" | "lstm";
 
 export default function ForecastPage() {
-  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
-  const [horizon, setHorizon] = useState<Horizon>(DEFAULT_SETTINGS.defaultForecastHorizon);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [productFamilies, setProductFamilies] = useState<string[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
+  const [selectedModel, setSelectedModel] = useState<ModelType>("prophet");
+  const [horizon, setHorizon] = useState<Horizon>(7);
+  const [pageLoading, setPageLoading] = useState(true);
 
-  // Load Admin Settings + Sales History
+  const {
+    training,
+    predicting,
+    trained,
+    metrics,
+    predictions,
+    error,
+    trainModel,
+    getPredictions,
+  } = useForecast();
+
+  // Fetch product families on mount
   useEffect(() => {
-    // Settings
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === "object") {
-        const merged: AdminSettings = { ...DEFAULT_SETTINGS, ...parsed };
-        setSettings(merged);
-        setHorizon(merged.defaultForecastHorizon || 7);
-      } else {
-        setSettings(DEFAULT_SETTINGS);
-        setHorizon(DEFAULT_SETTINGS.defaultForecastHorizon);
-      }
-    } catch {
-      setSettings(DEFAULT_SETTINGS);
-      setHorizon(DEFAULT_SETTINGS.defaultForecastHorizon);
-    }
-
-    // History
-    try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setHistory(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setHistory([]);
-    }
+    apiClient
+      .getProducts()
+      .then((resp) => {
+        if (resp.products) setProductFamilies(resp.products);
+      })
+      .catch(console.error)
+      .finally(() => setPageLoading(false));
   }, []);
 
-  const recentStats = useMemo(() => {
-    const sorted = [...history].sort((a, b) => (a.saleDate > b.saleDate ? 1 : -1));
-    const lastDate = sorted.length ? sorted[sorted.length - 1].saleDate : toISO(new Date());
+  // When trained and horizon changes, fetch new predictions
+  useEffect(() => {
+    if (trained) {
+      getPredictions(selectedFamily, selectedModel, horizon);
+    }
+  }, [horizon]);
 
-    // last 7 recorded days baseline
-    const last7 = sorted.slice(-7).map((e) => e.totalUnits || 0);
-    const baselineUnits = Math.round(
-      mean(last7.length ? last7 : sorted.map((e) => e.totalUnits || 0))
-    );
+  const handleTrain = async () => {
+    await trainModel(selectedFamily, selectedModel);
+  };
 
-    // Top products (by units) in last 14 records
-    const productAgg = new Map<string, { name: string; units: number }>();
-    sorted.slice(-14).forEach((entry) => {
-      entry.items.forEach((it) => {
-        const key = it.productId || it.productName;
-        const prev = productAgg.get(key) || { name: it.productName, units: 0 };
-        productAgg.set(key, {
-          name: it.productName,
-          units: prev.units + (it.quantity || 0),
-        });
-      });
-    });
+  const handlePredict = async () => {
+    await getPredictions(selectedFamily, selectedModel, horizon);
+  };
 
-    const topProducts = Array.from(productAgg.values())
-      .sort((a, b) => b.units - a.units)
-      .slice(0, 5);
-
-    return { lastDate, baselineUnits, topProducts };
-  }, [history]);
-
-  const forecast = useMemo(() => {
-    return buildMockForecast(recentStats.lastDate, horizon, recentStats.baselineUnits);
-  }, [recentStats.lastDate, recentStats.baselineUnits, horizon]);
+  // Transform predictions for chart
+  const chartData = useMemo(() => {
+    if (!predictions || !predictions.length) return [];
+    return predictions.map((p: any) => ({
+      date: p.date,
+      predicted: Math.round(p.forecast ?? p.predicted ?? 0),
+      lower: Math.round((p.forecast ?? p.predicted ?? 0) * 0.85),
+      upper: Math.round((p.forecast ?? p.predicted ?? 0) * 1.15),
+    }));
+  }, [predictions]);
 
   const summary = useMemo(() => {
-    const total = forecast.reduce((a, r) => a + r.predicted, 0);
-    const avg = forecast.length ? total / forecast.length : 0;
+    if (!chartData.length)
+      return { total: 0, avg: 0, minDay: { date: "", predicted: 0 }, maxDay: { date: "", predicted: 0 } };
 
-    const minDay = forecast.reduce(
-      (best, r) => (r.predicted < best.predicted ? r : best),
-      forecast[0] ?? { predicted: 0, date: "" }
-    );
-    const maxDay = forecast.reduce(
-      (best, r) => (r.predicted > best.predicted ? r : best),
-      forecast[0] ?? { predicted: 0, date: "" }
-    );
+    const total = chartData.reduce((a: number, r: any) => a + r.predicted, 0);
+    const avg = total / chartData.length;
+    const minDay = chartData.reduce((best: any, r: any) => (r.predicted < best.predicted ? r : best), chartData[0]);
+    const maxDay = chartData.reduce((best: any, r: any) => (r.predicted > best.predicted ? r : best), chartData[0]);
 
-    // suggested reorder qty = peak predicted - baseline (simple UI rule)
-    const reorder = Math.max(
-      0,
-      Math.round(maxDay.predicted * 1.05 - (recentStats.baselineUnits || 0))
-    );
+    return { total, avg, minDay, maxDay };
+  }, [chartData]);
 
-    // overall confidence average
-    const confidenceAvg = forecast.length
-      ? forecast.reduce((a, r) => a + r.confidence, 0) / forecast.length
-      : 0;
+  function fmtShort(iso: string) {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+    } catch {
+      return iso;
+    }
+  }
 
-    return {
-      total,
-      avg,
-      minDay,
-      maxDay,
-      reorder,
-      confidenceAvg,
-    };
-  }, [forecast, recentStats.baselineUnits]);
-
-  const showConfidence = settings.showConfidence;
-  const showSuggestions = settings.showSuggestions;
+  if (pageLoading) return <LoadingSpinner message="Loading forecast page..." />;
 
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a" }}>Demand Forecast</h1>
-          <p style={{ marginTop: 6, color: "#64748b", fontWeight: 600 }}>
-            Forecast for next {horizon} days{" "}
-            {showConfidence ? "with confidence band" : ""}{" "}
-            {showSuggestions ? "+ suggestions" : ""}.
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Demand Forecast</h1>
+          <p style={{ marginTop: 6, color: "#94a3b8", fontWeight: 500, fontSize: 14 }}>
+            Train ML models and get real sales predictions from the backend.
           </p>
         </div>
 
@@ -268,29 +114,150 @@ export default function ForecastPage() {
         </div>
       </div>
 
-      {/* If no history */}
-      {history.length === 0 ? (
+      {/* Controls */}
+      <div
+        style={{
+          marginTop: 16,
+          background: "white",
+          borderRadius: 12,
+          padding: 20,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+          display: "flex",
+          gap: 16,
+          alignItems: "end",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#64748b", marginBottom: 6 }}>
+            Product Family
+          </label>
+          <select
+            value={selectedFamily}
+            onChange={(e) => setSelectedFamily(e.target.value)}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #e2e8f0",
+              fontWeight: 700,
+              minWidth: 200,
+            }}
+          >
+            {productFamilies.map((f) => (
+              <option key={f} value={f}>
+                {getDisplayName(f)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#64748b", marginBottom: 6 }}>
+            Model Type
+          </label>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value as ModelType)}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #e2e8f0",
+              fontWeight: 700,
+              minWidth: 160,
+            }}
+          >
+            <option value="prophet">Prophet (Recommended)</option>
+            <option value="arima">ARIMA</option>
+            <option value="lstm">LSTM (Slow)</option>
+          </select>
+        </div>
+
+        <button
+          onClick={handleTrain}
+          disabled={training}
+          type="button"
+          style={{
+            padding: "10px 24px",
+            borderRadius: 10,
+            border: "none",
+            background: training ? "#94a3b8" : "#4f46e5",
+            color: "white",
+            fontWeight: 800,
+            cursor: training ? "wait" : "pointer",
+          }}
+        >
+          {training ? "Training..." : "Train Model"}
+        </button>
+
+        {trained && (
+          <button
+            onClick={handlePredict}
+            disabled={predicting}
+            type="button"
+            style={{
+              padding: "10px 24px",
+              borderRadius: 10,
+              border: "none",
+              background: predicting ? "#94a3b8" : "#059669",
+              color: "white",
+              fontWeight: 800,
+              cursor: predicting ? "wait" : "pointer",
+            }}
+          >
+            {predicting ? "Predicting..." : `Predict ${horizon} Days`}
+          </button>
+        )}
+      </div>
+
+      {error && <ErrorBanner message={error} />}
+
+      {/* Metrics after training */}
+      {trained && metrics && (
+        <div
+          style={{
+            marginTop: 16,
+            display: "grid",
+            gap: 20,
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          }}
+        >
+          <KPI title="Model" value={selectedModel.toUpperCase()} subtitle={getDisplayName(selectedFamily)} />
+          {metrics.mae != null && <KPI title="MAE" value={metrics.mae.toFixed(2)} subtitle="Mean Absolute Error" />}
+          {metrics.rmse != null && <KPI title="RMSE" value={metrics.rmse.toFixed(2)} subtitle="Root Mean Sq Error" />}
+          {metrics.mape != null && <KPI title="MAPE" value={`${(metrics.mape * 100).toFixed(1)}%`} subtitle="Mean Abs % Error" />}
+        </div>
+      )}
+
+      {/* Chart or empty state */}
+      {!trained && !training && (
         <div
           style={{
             marginTop: 16,
             background: "white",
-            borderRadius: 16,
-            padding: 16,
-            boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+            borderRadius: 12,
+            padding: 32,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
             color: "#64748b",
             fontWeight: 800,
+            textAlign: "center",
           }}
         >
-          No sales history found. Add entries in “Daily Sales Entry” to generate a meaningful forecast.
+          Select a product family and model type, then click "Train Model" to generate forecasts.
         </div>
-      ) : (
+      )}
+
+      {training && <LoadingSpinner message={`Training ${selectedModel.toUpperCase()} model on ${getDisplayName(selectedFamily)}...`} />}
+
+      {predicting && <LoadingSpinner message="Generating predictions..." />}
+
+      {chartData.length > 0 && !predicting && (
         <>
           {/* Summary Cards */}
           <div
             style={{
               marginTop: 16,
               display: "grid",
-              gap: 14,
+              gap: 20,
               gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             }}
           >
@@ -298,119 +265,41 @@ export default function ForecastPage() {
             <KPI title="Avg Daily Demand" value={`${summary.avg.toFixed(1)}`} subtitle="Units/day" />
             <KPI
               title="Peak Day"
-              value={`${fmtShort(summary.maxDay.date)} • ${summary.maxDay.predicted}`}
+              value={`${fmtShort(summary.maxDay.date)} - ${summary.maxDay.predicted}`}
               subtitle="Highest predicted units"
             />
-            {showConfidence && (
-              <KPI
-                title="Confidence"
-                value={`${Math.round(summary.confidenceAvg * 100)}%`}
-                subtitle="Avg model confidence"
-              />
-            )}
+            <KPI
+              title="Low Day"
+              value={`${fmtShort(summary.minDay.date)} - ${summary.minDay.predicted}`}
+              subtitle="Lowest predicted units"
+            />
           </div>
 
-          {/* Chart + Suggestions */}
-          <div
-            style={{
-              marginTop: 16,
-              display: "grid",
-              gap: 16,
-              gridTemplateColumns: "repeat(12, 1fr)",
-            }}
-          >
-            <Card
-              title="Forecast Trend"
-              subtitle={
-                showConfidence
-                  ? "Predicted demand with confidence band"
-                  : "Predicted demand (confidence hidden by admin settings)"
-              }
-              colSpan={showSuggestions ? 8 : 12}
-            >
-              <div style={{ height: 360 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={forecast}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickFormatter={fmtShort} />
-                    <YAxis />
-                    <Tooltip
-                      formatter={(value: any, name: any) => [value, name]}
-                      labelFormatter={(label) => `Date: ${label}`}
-                    />
-                    <Legend />
+          {/* Chart */}
+          <Card title="Forecast Trend" subtitle={`${getDisplayName(selectedFamily)} — ${selectedModel.toUpperCase()} model`}>
+            <div style={{ height: 360 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tickFormatter={fmtShort} />
+                  <YAxis />
+                  <Tooltip
+                    formatter={(value: any, name: any) => [Math.round(value), name]}
+                    labelFormatter={(label) => `Date: ${label}`}
+                  />
+                  <Legend />
+                  <Area type="monotone" dataKey="upper" stroke="none" fillOpacity={0.1} fill="#4f46e5" name="Upper Band" />
+                  <Area type="monotone" dataKey="lower" stroke="none" fillOpacity={0.1} fill="#4f46e5" name="Lower Band" />
+                  <Area type="monotone" dataKey="predicted" strokeWidth={3} fillOpacity={0.25} fill="#4f46e5" stroke="#4f46e5" name="Predicted" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
 
-                    {/* Confidence band (optional) */}
-                    {showConfidence && (
-                      <>
-                        <Area type="monotone" dataKey="upper" strokeWidth={0} fillOpacity={0.15} />
-                        <Area type="monotone" dataKey="lower" strokeWidth={0} fillOpacity={0.15} />
-                      </>
-                    )}
-
-                    {/* Main line */}
-                    <Area type="monotone" dataKey="predicted" strokeWidth={3} fillOpacity={0.25} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Pill text={`Baseline (recent avg): ${recentStats.baselineUnits || 0} units/day`} />
-                <Pill text={`Lowest: ${fmtShort(summary.minDay.date)} (${summary.minDay.predicted})`} />
-                <Pill text={`Highest: ${fmtShort(summary.maxDay.date)} (${summary.maxDay.predicted})`} />
-              </div>
-            </Card>
-
-            {showSuggestions && (
-              <Card title="Smart Suggestions" subtitle="Actionable recommendations" colSpan={4}>
-                <Suggestion
-                  title="Reorder suggestion"
-                  desc={`Consider stocking ~${summary.reorder} extra units to safely handle peak demand. Use Inventory → Suggested Reorder for per-product quantities.`}
-                  tone="indigo"
-                />
-                <Suggestion
-                  title="Peak-day readiness"
-                  desc={`Prepare for highest demand around ${fmtShort(summary.maxDay.date)}.`}
-                  tone="emerald"
-                />
-                <Suggestion
-                  title="Planning window"
-                  desc={`Admin settings: lead time ${settings.leadTimeDays}d + safety ${settings.safetyDays}d buffer. This affects reorder suggestions.`}
-                  tone="amber"
-                />
-
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>
-                    Top products (recent)
-                  </div>
-                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {(recentStats.topProducts.length
-                      ? recentStats.topProducts
-                      : [{ name: "—", units: 0 }]
-                    ).map((p, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontWeight: 800,
-                          color: "#334155",
-                        }}
-                      >
-                        <span>{p.name}</span>
-                        <span>{p.units}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            )}
-          </div>
-
-          {/* Footer note */}
-          <div style={{ marginTop: 16, color: "#64748b", fontWeight: 700, fontSize: 12 }}>
-            Note: Forecast is currently generated on the frontend for UI development. Later it will come from your ML backend.
-          </div>
+            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Pill text={`Lowest: ${fmtShort(summary.minDay.date)} (${summary.minDay.predicted})`} />
+              <Pill text={`Highest: ${fmtShort(summary.maxDay.date)} (${summary.maxDay.predicted})`} />
+            </div>
+          </Card>
         </>
       )}
     </div>
@@ -436,7 +325,7 @@ function HorizonButton({
         background: active ? "#4f46e5" : "white",
         color: active ? "white" : "#0f172a",
         padding: "10px 12px",
-        fontWeight: 900,
+        fontWeight: 800,
         cursor: "pointer",
       }}
     >
@@ -450,15 +339,15 @@ function KPI({ title, value, subtitle }: { title: string; value: string; subtitl
     <div
       style={{
         background: "white",
-        borderRadius: 16,
+        borderRadius: 12,
         padding: 16,
-        boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
-      <div style={{ color: "#64748b", fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>
+      <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
         {title}
       </div>
-      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{value}</div>
+      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{value}</div>
       <div style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>{subtitle}</div>
     </div>
   );
@@ -468,25 +357,23 @@ function Card({
   title,
   subtitle,
   children,
-  colSpan,
 }: {
   title: string;
   subtitle: string;
   children: React.ReactNode;
-  colSpan: number;
 }) {
   return (
     <div
       style={{
-        gridColumn: `span ${colSpan}`,
+        marginTop: 16,
         background: "white",
-        borderRadius: 16,
+        borderRadius: 12,
         padding: 16,
-        boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
       <div>
-        <div style={{ fontSize: 16, fontWeight: 900, color: "#0f172a" }}>{title}</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{title}</div>
         <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>{subtitle}</div>
       </div>
       <div style={{ marginTop: 12 }}>{children}</div>
@@ -503,46 +390,11 @@ function Pill({ text }: { text: string }) {
         padding: "8px 10px",
         borderRadius: 999,
         fontSize: 12,
-        fontWeight: 900,
+        fontWeight: 800,
         color: "#0f172a",
       }}
     >
       {text}
     </span>
-  );
-}
-
-function Suggestion({
-  title,
-  desc,
-  tone,
-}: {
-  title: string;
-  desc: string;
-  tone: "indigo" | "emerald" | "amber";
-}) {
-  const toneMap: Record<string, { bg: string; border: string; title: string }> = {
-    indigo: { bg: "#eef2ff", border: "#c7d2fe", title: "#3730a3" },
-    emerald: { bg: "#ecfdf5", border: "#a7f3d0", title: "#065f46" },
-    amber: { bg: "#fffbeb", border: "#fde68a", title: "#92400e" },
-  };
-
-  const t = toneMap[tone];
-
-  return (
-    <div
-      style={{
-        background: t.bg,
-        border: `1px solid ${t.border}`,
-        borderRadius: 16,
-        padding: 12,
-        marginTop: 10,
-      }}
-    >
-      <div style={{ fontWeight: 900, color: t.title }}>{title}</div>
-      <div style={{ marginTop: 6, color: "#334155", fontWeight: 700, fontSize: 13, lineHeight: 1.5 }}>
-        {desc}
-      </div>
-    </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { apiClient } from "@/lib/api-client";
+import { getDisplayName, getEmoji } from "@/lib/product-mapping";
 
 const SETTINGS_KEY = "sf_admin_settings_v1";
 
@@ -75,6 +77,45 @@ export default function InventoryPage() {
   const [edit, setEdit] = useState<InventoryItem | null>(null);
 
   const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
+
+  // Backend recommendations state
+  const [productFamilies, setProductFamilies] = useState<string[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
+  const [recommendations, setRecommendations] = useState<any>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+
+  // Load product families from backend
+  useEffect(() => {
+    apiClient.getProducts()
+      .then((resp) => {
+        if (resp.products) setProductFamilies(resp.products);
+      })
+      .catch(() => {});
+  }, []);
+
+  const fetchRecommendations = async () => {
+    setRecLoading(true);
+    setRecError(null);
+    try {
+      const resp = await apiClient.getInventoryRecommendations({
+        product_family: selectedFamily,
+        model_type: "prophet",
+        current_stock: 100,
+      });
+      if (resp.success) {
+        setRecommendations(resp.recommendations);
+        setAlerts(resp.alerts || []);
+      } else {
+        setRecError(resp.error || "Failed to get recommendations");
+      }
+    } catch (err: any) {
+      setRecError(err.message || "Backend not available or model not trained. Train a model first in the Forecast page.");
+    } finally {
+      setRecLoading(false);
+    }
+  };
 
   // Load admin settings
   useEffect(() => {
@@ -218,8 +259,8 @@ export default function InventoryPage() {
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a" }}>Inventory</h1>
-          <p style={{ marginTop: 6, color: "#64748b", fontWeight: 600 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Inventory</h1>
+          <p style={{ marginTop: 6, color: "#94a3b8", fontWeight: 500, fontSize: 14 }}>
             Track stock, low-stock alerts, and reorder suggestions (based on last 7 sales).
           </p>
           <p style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>
@@ -249,7 +290,7 @@ export default function InventoryPage() {
               background: "#4f46e5",
               color: "white",
               padding: "10px 12px",
-              fontWeight: 900,
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
@@ -263,7 +304,7 @@ export default function InventoryPage() {
         style={{
           marginTop: 16,
           display: "grid",
-          gap: 14,
+          gap: 20,
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
         }}
       >
@@ -298,7 +339,7 @@ export default function InventoryPage() {
                         padding: 12,
                       }}
                     >
-                      <div style={{ fontWeight: 900, color: "#991b1b" }}>{r.name}</div>
+                      <div style={{ fontWeight: 800, color: "#991b1b" }}>{r.name}</div>
                       <div style={{ marginTop: 6, fontSize: 13, color: "#7f1d1d", fontWeight: 800 }}>
                         Stock: {r.stock} • Reorder Point: {r.reorderPoint}
                       </div>
@@ -349,7 +390,7 @@ export default function InventoryPage() {
                         settings.lowStockAlertsEnabled && r.lowStock ? "#fff1f2" : "#f8fafc",
                     }}
                   >
-                    <td style={{ padding: 12, borderRadius: 12, fontWeight: 900, color: "#0f172a" }}>
+                    <td style={{ padding: 12, borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
                       {r.name}
                       <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
                         Unit price: ₹ {r.unitPrice}
@@ -369,7 +410,7 @@ export default function InventoryPage() {
                       <Pill text={`${r.reorderPoint}`} tone="indigo" />
                     </td>
 
-                    <td style={{ padding: 12, fontWeight: 900, color: "#0f172a" }}>
+                    <td style={{ padding: 12, fontWeight: 800, color: "#0f172a" }}>
                       {r.avgDaily}
                       <div style={{ marginTop: 4, fontSize: 12, color: "#64748b", fontWeight: 800 }}>
                         Sold (7 entries): {r.totalUnitsLast7}
@@ -412,6 +453,90 @@ export default function InventoryPage() {
         </Card>
       </div>
 
+      {/* Backend AI Recommendations Section */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "end" }}>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>AI-Powered Recommendations</h2>
+            <p style={{ marginTop: 4, color: "#64748b", fontWeight: 600, fontSize: 13 }}>
+              Get inventory recommendations from the ML backend for perishable products.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#64748b", marginBottom: 6 }}>
+                Product Family
+              </label>
+              <select
+                value={selectedFamily}
+                onChange={(e) => setSelectedFamily(e.target.value)}
+                style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e2e8f0", fontWeight: 700 }}
+              >
+                {productFamilies.map((f) => (
+                  <option key={f} value={f}>{getEmoji(f)} {getDisplayName(f)}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={fetchRecommendations}
+              disabled={recLoading}
+              type="button"
+              style={{
+                padding: "10px 20px",
+                borderRadius: 10,
+                border: "none",
+                background: recLoading ? "#94a3b8" : "#059669",
+                color: "white",
+                fontWeight: 800,
+                cursor: recLoading ? "wait" : "pointer",
+              }}
+            >
+              {recLoading ? "Loading..." : "Get Recommendations"}
+            </button>
+          </div>
+        </div>
+
+        {recError && (
+          <div style={{ marginTop: 12, padding: 14, background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 14, color: "#92400e", fontWeight: 700, fontSize: 13 }}>
+            {recError}
+          </div>
+        )}
+
+        {recommendations && (
+          <div style={{ marginTop: 16, display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            <KPI title="Stock Status" value={recommendations.stock_status || "N/A"} subtitle={getDisplayName(selectedFamily)} />
+            <KPI title="Order Recommendation" value={recommendations.order_recommendation || "N/A"} subtitle="Action needed" />
+            <KPI title="Order Quantity" value={`${recommendations.order_quantity ?? "N/A"}`} subtitle="Suggested units" />
+            <KPI title="Wastage Risk" value={recommendations.wastage_risk || "N/A"} subtitle="Perishability factor" />
+            <KPI title="Safety Stock" value={`${recommendations.safety_stock?.toFixed(0) ?? "N/A"}`} subtitle="Buffer units" />
+            <KPI title="Reorder Point" value={`${recommendations.reorder_point?.toFixed(0) ?? "N/A"}`} subtitle="Trigger level" />
+            <KPI title="Days of Stock" value={`${recommendations.days_of_stock?.toFixed(1) ?? "N/A"}`} subtitle="At current rate" />
+            <KPI title="Daily Forecast" value={`${recommendations.avg_daily_forecast?.toFixed(1) ?? "N/A"}`} subtitle="Avg units/day" />
+          </div>
+        )}
+
+        {alerts.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>Alerts</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {alerts.map((alert: any, idx: number) => (
+                <div key={idx} style={{
+                  padding: 12,
+                  borderRadius: 14,
+                  background: alert.type === "critical" ? "#fee2e2" : alert.type === "warning" ? "#fef3c7" : "#ecfdf5",
+                  border: `1px solid ${alert.type === "critical" ? "#fecaca" : alert.type === "warning" ? "#fde68a" : "#a7f3d0"}`,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: alert.type === "critical" ? "#991b1b" : alert.type === "warning" ? "#92400e" : "#065f46",
+                }}>
+                  {alert.message || JSON.stringify(alert)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {showModal && (
         <ProductModal
           initial={edit}
@@ -432,15 +557,15 @@ const btnBase: React.CSSProperties = {
   border: "1px solid #e2e8f0",
   background: "white",
   padding: "10px 12px",
-  fontWeight: 900,
+  fontWeight: 800,
   cursor: "pointer",
 };
 
 function KPI({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (
-    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
-      <div style={{ color: "#64748b", fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>{title}</div>
-      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{value}</div>
+    <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>{title}</div>
+      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{value}</div>
       <div style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>{subtitle}</div>
     </div>
   );
@@ -462,12 +587,12 @@ function Card({
       style={{
         gridColumn: `span ${colSpan}`,
         background: "white",
-        borderRadius: 16,
+        borderRadius: 12,
         padding: 16,
-        boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
-      <div style={{ fontSize: 16, fontWeight: 900, color: "#0f172a" }}>{title}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{title}</div>
       <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>{subtitle}</div>
       <div style={{ marginTop: 12 }}>{children}</div>
     </div>
@@ -492,7 +617,7 @@ function Pill({ text, tone }: { text: string; tone: "rose" | "indigo" | "emerald
         padding: "6px 10px",
         borderRadius: 999,
         fontSize: 12,
-        fontWeight: 900,
+        fontWeight: 800,
         minWidth: 42,
         textAlign: "center",
       }}
@@ -551,7 +676,7 @@ function ProductModal({
       <div style={modal}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>
               {initial ? "Edit Product" : "Add Product"}
             </div>
             <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>
@@ -620,7 +745,7 @@ function Field({
 }) {
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 900, color: "#334155" }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#334155" }}>{label}</div>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -652,7 +777,7 @@ const overlay: React.CSSProperties = {
 const modal: React.CSSProperties = {
   width: "min(760px, 100%)",
   background: "white",
-  borderRadius: 18,
+  borderRadius: 14,
   padding: 16,
   boxShadow: "0 20px 80px rgba(0,0,0,0.25)",
 };
@@ -664,5 +789,5 @@ const closeBtn: React.CSSProperties = {
   width: 40,
   height: 40,
   cursor: "pointer",
-  fontWeight: 900,
+  fontWeight: 800,
 };

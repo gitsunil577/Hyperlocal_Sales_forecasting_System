@@ -1,11 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
   AreaChart,
   Area,
   XAxis,
@@ -22,6 +18,7 @@ interface Report {
   type: string;
   category: string;
   generatedDate: string;
+  period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
   size: string;
   status: 'ready' | 'generating' | 'scheduled';
   icon: string;
@@ -29,91 +26,52 @@ interface Report {
 
 export default function ReportsPage() {
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'sales' | 'inventory' | 'forecast' | 'customer'>('all');
-  const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const downloadReport = useCallback((report: Report) => {
+    const data = {
+      report: report.title,
+      category: report.category,
+      type: report.type,
+      generatedDate: report.generatedDate,
+      period: report.period,
+      status: report.status,
+      sampleData: [
+        { metric: "Total Sales", value: "$12,450" },
+        { metric: "Units Sold", value: "1,234" },
+        { metric: "Avg Order Value", value: "$10.09" },
+        { metric: "Growth Rate", value: "+8.5%" },
+      ],
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${report.title.replace(/\s+/g, "_").toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Report downloaded!");
+  }, [showToast]);
 
   // Sample reports data
   const reports: Report[] = [
-    {
-      id: '1',
-      title: 'Monthly Sales Summary',
-      type: 'PDF',
-      category: 'sales',
-      generatedDate: '2025-01-22',
-      size: '2.4 MB',
-      status: 'ready',
-      icon: '📊'
-    },
-    {
-      id: '2',
-      title: 'Inventory Status Report',
-      type: 'Excel',
-      category: 'inventory',
-      generatedDate: '2025-01-21',
-      size: '1.8 MB',
-      status: 'ready',
-      icon: '📦'
-    },
-    {
-      id: '3',
-      title: 'Q1 Sales Forecast',
-      type: 'PDF',
-      category: 'forecast',
-      generatedDate: '2025-01-20',
-      size: '3.2 MB',
-      status: 'ready',
-      icon: '🔮'
-    },
-    {
-      id: '4',
-      title: 'Customer Analytics Report',
-      type: 'PDF',
-      category: 'customer',
-      generatedDate: '2025-01-19',
-      size: '2.1 MB',
-      status: 'ready',
-      icon: '👥'
-    },
-    {
-      id: '5',
-      title: 'Weekly Performance Dashboard',
-      type: 'Excel',
-      category: 'sales',
-      generatedDate: '2025-01-18',
-      size: '1.5 MB',
-      status: 'generating',
-      icon: '📈'
-    },
-    {
-      id: '6',
-      title: 'Product Category Analysis',
-      type: 'PDF',
-      category: 'inventory',
-      generatedDate: '2025-01-17',
-      size: '2.8 MB',
-      status: 'ready',
-      icon: '🏷️'
-    },
-    {
-      id: '7',
-      title: 'Annual Forecast Report 2025',
-      type: 'PDF',
-      category: 'forecast',
-      generatedDate: '2025-01-15',
-      size: '4.5 MB',
-      status: 'scheduled',
-      icon: '📅'
-    },
-    {
-      id: '8',
-      title: 'Revenue by Region',
-      type: 'Excel',
-      category: 'sales',
-      generatedDate: '2025-01-14',
-      size: '1.9 MB',
-      status: 'ready',
-      icon: '🌍'
-    },
+    { id: '1', title: 'Monthly Sales Summary', type: 'PDF', category: 'sales', period: 'monthly', generatedDate: '2025-01-22', size: '2.4 MB', status: 'ready', icon: '📊' },
+    { id: '2', title: 'Inventory Status Report', type: 'Excel', category: 'inventory', period: 'weekly', generatedDate: '2025-01-21', size: '1.8 MB', status: 'ready', icon: '📦' },
+    { id: '3', title: 'Q1 Sales Forecast', type: 'PDF', category: 'forecast', period: 'quarterly', generatedDate: '2025-01-20', size: '3.2 MB', status: 'ready', icon: '🔮' },
+    { id: '4', title: 'Customer Analytics Report', type: 'PDF', category: 'customer', period: 'monthly', generatedDate: '2025-01-19', size: '2.1 MB', status: 'ready', icon: '👥' },
+    { id: '5', title: 'Weekly Performance Dashboard', type: 'Excel', category: 'sales', period: 'weekly', generatedDate: '2025-01-18', size: '1.5 MB', status: 'generating', icon: '📈' },
+    { id: '6', title: 'Product Category Analysis', type: 'PDF', category: 'inventory', period: 'daily', generatedDate: '2025-01-17', size: '2.8 MB', status: 'ready', icon: '🏷️' },
+    { id: '7', title: 'Annual Forecast Report 2025', type: 'PDF', category: 'forecast', period: 'yearly', generatedDate: '2025-01-15', size: '4.5 MB', status: 'scheduled', icon: '📅' },
+    { id: '8', title: 'Revenue by Region', type: 'Excel', category: 'sales', period: 'quarterly', generatedDate: '2025-01-14', size: '1.9 MB', status: 'ready', icon: '🌍' },
   ];
 
   // Report generation stats
@@ -212,7 +170,9 @@ export default function ReportsPage() {
   };
 
   const filteredReports = reports.filter(report => {
-    return selectedCategory === 'all' || report.category === selectedCategory;
+    const catMatch = selectedCategory === 'all' || report.category === selectedCategory;
+    const periodMatch = selectedPeriod === 'all' || report.period === selectedPeriod;
+    return catMatch && periodMatch;
   });
 
   return (
@@ -227,11 +187,11 @@ export default function ReportsPage() {
             <p className="text-slate-600 text-lg">Generate, view, and download comprehensive business reports</p>
           </div>
           <div className="flex gap-3">
-            <button className="px-6 py-3 bg-white text-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2 font-medium border border-slate-200">
-              ⚙️ Schedule Report
+            <button onClick={() => showToast("Report scheduling — coming soon!")} className="px-6 py-3 bg-white text-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2 font-medium border border-slate-200">
+              Schedule Report
             </button>
-            <button className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 font-medium hover:scale-105">
-              ➕ Generate New Report
+            <button onClick={() => showToast("Report generation — coming soon!")} className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 font-medium hover:scale-105">
+              + Generate New Report
             </button>
           </div>
         </div>
@@ -306,7 +266,7 @@ export default function ReportsPage() {
                   <div className="text-4xl mb-3">{template.icon}</div>
                   <h3 className="text-lg font-bold text-slate-800 mb-2">{template.name}</h3>
                   <p className="text-sm text-slate-600 mb-4">{template.description}</p>
-                  <button className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all">
+                  <button onClick={() => showToast(`${template.name} generation — coming soon!`)} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all">
                     Generate Report
                   </button>
                 </div>
@@ -333,11 +293,12 @@ export default function ReportsPage() {
                   <option value="customer">Customer</option>
                 </select>
 
-                <select 
+                <select
                   value={selectedPeriod}
                   onChange={(e) => setSelectedPeriod(e.target.value as any)}
                   className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 bg-white text-sm"
                 >
+                  <option value="all">All Periods</option>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -395,22 +356,22 @@ export default function ReportsPage() {
                   <div className="flex gap-2">
                     {report.status === 'ready' && (
                       <>
-                        <button className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all">
-                          📥 Download
+                        <button onClick={() => downloadReport(report)} className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all">
+                          Download
                         </button>
-                        <button className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-all">
-                          👁️
+                        <button onClick={() => showToast("Preview — coming soon!")} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-all">
+                          View
                         </button>
                       </>
                     )}
                     {report.status === 'generating' && (
                       <button className="flex-1 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg text-sm font-medium cursor-not-allowed">
-                        ⏳ Generating...
+                        Generating...
                       </button>
                     )}
                     {report.status === 'scheduled' && (
-                      <button className="flex-1 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
-                        📅 Scheduled
+                      <button className="flex-1 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium cursor-default">
+                        Scheduled
                       </button>
                     )}
                   </div>
@@ -463,14 +424,11 @@ export default function ReportsPage() {
                           <div className="flex gap-2">
                             {report.status === 'ready' && (
                               <>
-                                <button className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Download">
-                                  📥
+                                <button onClick={() => downloadReport(report)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors text-sm font-medium" title="Download">
+                                  Download
                                 </button>
-                                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
-                                  👁️
-                                </button>
-                                <button className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors" title="Share">
-                                  🔗
+                                <button onClick={() => showToast("Preview — coming soon!")} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm" title="View">
+                                  View
                                 </button>
                               </>
                             )}
@@ -488,15 +446,32 @@ export default function ReportsPage() {
         {/* No Results */}
         {filteredReports.length === 0 && (
           <div className="bg-white rounded-2xl p-12 shadow-lg border border-slate-100 text-center">
-            <div className="text-6xl mb-4">📄</div>
             <h3 className="text-xl font-bold text-slate-800 mb-2">No Reports Found</h3>
             <p className="text-slate-600 mb-6">No reports match your current filter criteria</p>
-            <button className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all font-medium">
+            <button onClick={() => showToast("Report generation — coming soon!")} className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all font-medium">
               Generate Your First Report
             </button>
           </div>
         )}
+
+        {/* Toast */}
+        {toast && (
+          <div style={{
+            position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+            background: "#1e293b", color: "white", padding: "12px 24px", borderRadius: 10,
+            fontSize: 14, fontWeight: 600, zIndex: 9999, boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+            animation: "fadeInUp 0.25s ease-out",
+          }}>
+            {toast}
+          </div>
+        )}
       </div>
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

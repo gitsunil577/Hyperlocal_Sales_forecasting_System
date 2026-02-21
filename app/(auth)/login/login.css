@@ -116,11 +116,18 @@
   line-height: 1.6;
 }
 
+.features-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
 .feature-icon {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin: 15px 0;
+  margin: 10px 0;
   font-size: 1em;
 }
 

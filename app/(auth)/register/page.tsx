@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, FormEvent, ChangeEvent } from 'react';
-import  Image from 'next/image';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import './register.css';
 
 interface FormData {
@@ -25,6 +27,7 @@ interface FormErrors {
 }
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     fullName: '',
     email: '',
@@ -103,32 +106,45 @@ export default function RegisterPage() {
 
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      alert('Registration successful! Redirecting to dashboard...');
-      setIsLoading(false);
-    }, 1500);
+    try {
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          email: formData.email,
+          password: formData.password,
+          businessName: formData.businessName,
+          location: formData.location,
+        }),
+      });
 
-    // Your actual registration logic would go here:
-    // try {
-    //   const response = await fetch('/api/auth/register', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({
-    //       fullName: formData.fullName,
-    //       email: formData.email,
-    //       password: formData.password,
-    //       businessName: formData.businessName,
-    //       location: formData.location
-    //     })
-    //   });
-    //   const data = await response.json();
-    //   // Handle successful registration
-    // } catch (error) {
-    //   console.error('Registration error:', error);
-    // } finally {
-    //   setIsLoading(false);
-    // }
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrors({ email: data.error || 'Registration failed.' });
+        return;
+      }
+
+      // Auto sign-in after successful registration
+      const signInResult = await signIn('credentials', {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
+      });
+
+      if (signInResult?.ok) {
+        const roleHome = data.role === 'admin' ? '/admin' : '/dashboard';
+        router.push(roleHome);
+      } else {
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setErrors({ email: 'Registration failed. Please try again.' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

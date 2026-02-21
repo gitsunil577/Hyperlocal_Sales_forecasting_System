@@ -1,157 +1,173 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
   Area,
   AreaChart,
-} from 'recharts';
-import './predictions.css';
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import "./predictions.css";
+import { apiClient } from "@/lib/api-client";
+import { getDisplayName, getEmoji } from "@/lib/product-mapping";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+import ErrorBanner from "@/app/components/ErrorBanner";
 
-interface PredictionData {
-  date: string;
-  predicted: number;
-  confidence: number;
-  trend: 'up' | 'down' | 'stable';
-}
+type ModelType = "arima" | "prophet" | "lstm";
 
-interface ProductPrediction {
-  id: number;
-  name: string;
-  category: string;
-  currentSales: number;
-  predictedSales: number;
-  confidence: number;
-  recommendation: string;
-  trend: 'up' | 'down' | 'stable';
+interface FamilyStatus {
+  family: string;
+  displayName: string;
+  trained: boolean;
+  training: boolean;
+  predictions: any[];
+  metrics: any | null;
+  error: string | null;
 }
 
 export default function PredictionsPage() {
-  const [timeRange, setTimeRange] = useState<'7days' | '30days' | '90days'>('30days');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'electronics' | 'clothing' | 'food'>('all');
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [modelType, setModelType] = useState<ModelType>("prophet");
+  const [steps, setSteps] = useState(7);
+  const [families, setFamilies] = useState<FamilyStatus[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
 
-  // Sample prediction data for next 30 days
-  const predictionData: PredictionData[] = [
-    { date: 'Week 1', predicted: 12500, confidence: 95, trend: 'up' },
-    { date: 'Week 2', predicted: 13200, confidence: 93, trend: 'up' },
-    { date: 'Week 3', predicted: 14100, confidence: 91, trend: 'up' },
-    { date: 'Week 4', predicted: 13800, confidence: 89, trend: 'stable' },
-    { date: 'Week 5', predicted: 15200, confidence: 87, trend: 'up' },
-    { date: 'Week 6', predicted: 14900, confidence: 85, trend: 'stable' },
-  ];
+  // Load product families
+  useEffect(() => {
+    apiClient
+      .getProducts()
+      .then((resp) => {
+        if (resp.products) {
+          setFamilies(
+            resp.products.map((f: string) => ({
+              family: f,
+              displayName: getDisplayName(f),
+              trained: false,
+              training: false,
+              predictions: [],
+              metrics: null,
+              error: null,
+            }))
+          );
+        }
+      })
+      .catch((err) => setPageError(err.message))
+      .finally(() => setPageLoading(false));
+  }, []);
 
-  // Sample product predictions
-  const productPredictions: ProductPrediction[] = [
-    {
-      id: 1,
-      name: 'Wireless Headphones Pro',
-      category: 'Electronics',
-      currentSales: 450,
-      predictedSales: 680,
-      confidence: 94,
-      recommendation: 'Increase stock by 40%',
-      trend: 'up'
-    },
-    {
-      id: 2,
-      name: 'Smart Watch Series X',
-      category: 'Electronics',
-      currentSales: 320,
-      predictedSales: 280,
-      confidence: 91,
-      recommendation: 'Reduce stock by 15%',
-      trend: 'down'
-    },
-    {
-      id: 3,
-      name: 'Premium T-Shirt',
-      category: 'Clothing',
-      currentSales: 890,
-      predictedSales: 1250,
-      confidence: 96,
-      recommendation: 'Increase stock by 50%',
-      trend: 'up'
-    },
-    {
-      id: 4,
-      name: 'Running Shoes Elite',
-      category: 'Clothing',
-      currentSales: 560,
-      predictedSales: 540,
-      confidence: 89,
-      recommendation: 'Maintain current stock',
-      trend: 'stable'
-    },
-    {
-      id: 5,
-      name: 'Organic Coffee Beans',
-      category: 'Food',
-      currentSales: 1200,
-      predictedSales: 1580,
-      confidence: 93,
-      recommendation: 'Increase stock by 35%',
-      trend: 'up'
-    },
-  ];
+  const trainFamily = async (family: string) => {
+    setFamilies((prev) =>
+      prev.map((f) =>
+        f.family === family ? { ...f, training: true, error: null } : f
+      )
+    );
 
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'up': return '📈';
-      case 'down': return '📉';
-      case 'stable': return '➡️';
-      default: return '➡️';
+    try {
+      const trainResp = await apiClient.trainModel({
+        product_family: family,
+        model_type: modelType,
+      });
+
+      if (!trainResp.success) throw new Error(trainResp.error || "Training failed");
+
+      // Get predictions
+      const predResp = await apiClient.getPredictions({
+        product_family: family,
+        model_type: modelType,
+        steps,
+      });
+
+      setFamilies((prev) =>
+        prev.map((f) =>
+          f.family === family
+            ? {
+                ...f,
+                trained: true,
+                training: false,
+                metrics: trainResp.metrics || null,
+                predictions: predResp.success ? predResp.forecast || [] : [],
+                error: predResp.success ? null : predResp.error,
+              }
+            : f
+        )
+      );
+    } catch (err: any) {
+      setFamilies((prev) =>
+        prev.map((f) =>
+          f.family === family
+            ? { ...f, training: false, error: err.message || "Failed" }
+            : f
+        )
+      );
     }
   };
 
-  const getTrendColor = (trend: string) => {
-    switch (trend) {
-      case 'up': return 'trend-up';
-      case 'down': return 'trend-down';
-      case 'stable': return 'trend-stable';
-      default: return 'trend-stable';
+  const trainAll = async () => {
+    for (const f of families) {
+      if (!f.trained && !f.training) {
+        await trainFamily(f.family);
+      }
     }
   };
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 90) return 'confidence-high';
-    if (confidence >= 80) return 'confidence-medium';
-    return 'confidence-low';
-  };
+  const trainedFamilies = families.filter((f) => f.trained);
+  const totalPredictedUnits = trainedFamilies.reduce(
+    (sum, f) => sum + f.predictions.reduce((s: number, p: any) => s + (p.forecast ?? p.predicted ?? 0), 0),
+    0
+  );
+  const avgAccuracy = trainedFamilies.length
+    ? trainedFamilies.reduce((s, f) => s + (f.metrics?.mape != null ? (1 - f.metrics.mape) * 100 : 0), 0) /
+      trainedFamilies.length
+    : 0;
+
+  // Chart data for selected family
+  const selectedData = families.find((f) => f.family === selectedFamily);
+  const chartData = (selectedData?.predictions || []).map((p: any) => ({
+    date: p.date,
+    predicted: Math.round(p.forecast ?? p.predicted ?? 0),
+  }));
+
+  if (pageLoading) return <LoadingSpinner message="Loading predictions..." />;
+  if (pageError) return <ErrorBanner message={pageError} />;
 
   return (
     <div className="predictions-page">
       <div className="predictions-container">
-        {/* Page Header */}
+        {/* Header */}
         <div className="predictions-header">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
               Sales Predictions
             </h1>
             <p className="predictions-subtitle">
-              AI-powered forecasts and demand predictions for your inventory
+              ML-powered forecasts for all perishable product categories
             </p>
           </div>
           <div className="header-actions">
-            <select 
+            <select
               className="time-range-select"
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as any)}
+              value={steps}
+              onChange={(e) => setSteps(Number(e.target.value))}
             >
-              <option value="7days">Next 7 Days</option>
-              <option value="30days">Next 30 Days</option>
-              <option value="90days">Next 90 Days</option>
+              <option value={7}>Next 7 Days</option>
+              <option value={14}>Next 14 Days</option>
+              <option value={30}>Next 30 Days</option>
             </select>
-            <button className="generate-report-btn">
-              📊 Generate Report
+            <select
+              className="time-range-select"
+              value={modelType}
+              onChange={(e) => setModelType(e.target.value as ModelType)}
+            >
+              <option value="prophet">Prophet</option>
+              <option value="arima">ARIMA</option>
+              <option value="lstm">LSTM</option>
+            </select>
+            <button className="generate-report-btn" onClick={trainAll}>
+              Train All Models
             </button>
           </div>
         </div>
@@ -159,124 +175,103 @@ export default function PredictionsPage() {
         {/* Summary Cards */}
         <div className="summary-cards">
           <div className="summary-card">
-            <div className="summary-icon" style={{background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'}}>
+            <div className="summary-icon" style={{ background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)" }}>
               🎯
             </div>
             <div className="summary-content">
-              <h3>Average Accuracy</h3>
-              <p className="summary-value">94.2%</p>
-              <span className="summary-change positive">↑ 2.1% from last month</span>
+              <h3>Avg Model Accuracy</h3>
+              <p className="summary-value">{avgAccuracy > 0 ? `${avgAccuracy.toFixed(1)}%` : "N/A"}</p>
+              <span className="summary-change neutral">
+                {trainedFamilies.length}/{families.length} models trained
+              </span>
             </div>
           </div>
 
           <div className="summary-card">
-            <div className="summary-icon" style={{background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)'}}>
+            <div className="summary-icon" style={{ background: "linear-gradient(135deg, #10b981 0%, #34d399 100%)" }}>
               📈
             </div>
             <div className="summary-content">
-              <h3>Predicted Growth</h3>
-              <p className="summary-value">+18.5%</p>
-              <span className="summary-change positive">Next 30 days</span>
+              <h3>Total Predicted</h3>
+              <p className="summary-value">{Math.round(totalPredictedUnits).toLocaleString()} units</p>
+              <span className="summary-change positive">Next {steps} days</span>
             </div>
           </div>
 
           <div className="summary-card">
-            <div className="summary-icon" style={{background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)'}}>
-              ⚠️
+            <div className="summary-icon" style={{ background: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)" }}>
+              📦
             </div>
             <div className="summary-content">
-              <h3>High Demand Items</h3>
-              <p className="summary-value">12</p>
-              <span className="summary-change neutral">Requires restocking</span>
+              <h3>Product Categories</h3>
+              <p className="summary-value">{families.length}</p>
+              <span className="summary-change neutral">Perishable items</span>
             </div>
           </div>
 
           <div className="summary-card">
-            <div className="summary-icon" style={{background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'}}>
-              📉
+            <div className="summary-icon" style={{ background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)" }}>
+              🤖
             </div>
             <div className="summary-content">
-              <h3>Declining Items</h3>
-              <p className="summary-value">5</p>
-              <span className="summary-change negative">Consider promotions</span>
+              <h3>Model Type</h3>
+              <p className="summary-value">{modelType.toUpperCase()}</p>
+              <span className="summary-change neutral">Active model</span>
             </div>
           </div>
         </div>
 
-        {/* Prediction Chart */}
-        <div className="chart-section">
-          <div className="chart-card-large">
-            <div className="chart-card-header">
-              <div>
-                <h2>Sales Forecast Trend</h2>
-                <p>Predicted sales performance for the next period</p>
+        {/* Chart for selected family */}
+        {selectedData && chartData.length > 0 && (
+          <div className="chart-section">
+            <div className="chart-card-large">
+              <div className="chart-card-header">
+                <div>
+                  <h2>{selectedData.displayName} — Forecast</h2>
+                  <p>{modelType.toUpperCase()} model, {steps}-day prediction</p>
+                </div>
               </div>
-              <div className="confidence-legend">
-                <span className="legend-item">
-                  <span className="legend-dot high"></span>
-                  High Confidence (90%+)
-                </span>
-                <span className="legend-item">
-                  <span className="legend-dot medium"></span>
-                  Medium Confidence (80-89%)
-                </span>
+              <div className="chart-wrapper" style={{ height: "400px", minHeight: "400px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: "0.875rem" }} />
+                    <YAxis stroke="#64748b" style={{ fontSize: "0.875rem" }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "0.75rem",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="predicted"
+                      stroke="#6366f1"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#colorPredicted)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-            <div className="chart-wrapper" style={{ height: '400px', minHeight: '400px' }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <AreaChart data={predictionData}>
-                  <defs>
-                    <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: '0.875rem' }} />
-                  <YAxis stroke="#64748b" style={{ fontSize: '0.875rem' }} />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '0.75rem',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="predicted" 
-                    stroke="#6366f1" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorPredicted)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Product Predictions Table */}
+        {/* Product Family Table */}
         <div className="predictions-table-section">
           <div className="table-header-section">
             <div>
-              <h2>Product-Level Predictions</h2>
-              <p>Detailed forecasts for individual products</p>
-            </div>
-            <div className="table-filters">
-              <select 
-                className="category-filter"
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value as any)}
-              >
-                <option value="all">All Categories</option>
-                <option value="electronics">Electronics</option>
-                <option value="clothing">Clothing</option>
-                <option value="food">Food & Beverages</option>
-              </select>
-              <button className="export-table-btn">
-                📤 Export
-              </button>
+              <h2>Product Category Predictions</h2>
+              <p>Train models and view forecasts for each perishable category</p>
             </div>
           </div>
 
@@ -284,89 +279,129 @@ export default function PredictionsPage() {
             <table className="predictions-table">
               <thead>
                 <tr>
-                  <th>Product Name</th>
-                  <th>Category</th>
-                  <th>Current Sales</th>
-                  <th>Predicted Sales</th>
-                  <th>Change</th>
-                  <th>Confidence</th>
-                  <th>Trend</th>
-                  <th>Recommendation</th>
+                  <th>Product Category</th>
+                  <th>Status</th>
+                  <th>Predicted ({steps}d)</th>
+                  <th>MAE</th>
+                  <th>RMSE</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {productPredictions.map((product) => (
-                  <tr key={product.id}>
-                    <td className="product-name-cell">
-                      <div className="product-icon">📦</div>
-                      <span>{product.name}</span>
-                    </td>
-                    <td>
-                      <span className="category-badge">{product.category}</span>
-                    </td>
-                    <td className="numeric-cell">{product.currentSales.toLocaleString()}</td>
-                    <td className="numeric-cell predicted">{product.predictedSales.toLocaleString()}</td>
-                    <td>
-                      <span className={`change-badge ${getTrendColor(product.trend)}`}>
-                        {getTrendIcon(product.trend)}
-                        {Math.abs(product.predictedSales - product.currentSales)} units
-                      </span>
-                    </td>
-                    <td>
-                      <div className="confidence-cell">
-                        <div className={`confidence-bar ${getConfidenceColor(product.confidence)}`}>
-                          <div 
-                            className="confidence-fill"
-                            style={{ width: `${product.confidence}%` }}
-                          ></div>
+                {families.map((f) => {
+                  const totalPred = f.predictions.reduce(
+                    (s: number, p: any) => s + Math.round(p.forecast ?? p.predicted ?? 0),
+                    0
+                  );
+                  return (
+                    <tr key={f.family}>
+                      <td className="product-name-cell">
+                        <div className="product-icon">{getEmoji(f.family)}</div>
+                        <span>{f.displayName}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`category-badge`}
+                          style={{
+                            background: f.trained ? "#dcfce7" : f.training ? "#fef3c7" : "#f1f5f9",
+                            color: f.trained ? "#166534" : f.training ? "#92400e" : "#64748b",
+                          }}
+                        >
+                          {f.training ? "Training..." : f.trained ? "Trained" : "Not trained"}
+                        </span>
+                      </td>
+                      <td className="numeric-cell predicted">
+                        {f.trained ? `${totalPred.toLocaleString()} units` : "—"}
+                      </td>
+                      <td className="numeric-cell">
+                        {f.metrics?.mae != null ? f.metrics.mae.toFixed(1) : "—"}
+                      </td>
+                      <td className="numeric-cell">
+                        {f.metrics?.rmse != null ? f.metrics.rmse.toFixed(1) : "—"}
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            onClick={() => trainFamily(f.family)}
+                            disabled={f.training}
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 8,
+                              border: "none",
+                              background: f.training ? "#94a3b8" : "#4f46e5",
+                              color: "white",
+                              fontWeight: 700,
+                              fontSize: 12,
+                              cursor: f.training ? "wait" : "pointer",
+                            }}
+                          >
+                            {f.training ? "..." : f.trained ? "Retrain" : "Train"}
+                          </button>
+                          {f.trained && (
+                            <button
+                              onClick={() => setSelectedFamily(f.family === selectedFamily ? null : f.family)}
+                              style={{
+                                padding: "6px 14px",
+                                borderRadius: 8,
+                                border: "1px solid #e2e8f0",
+                                background: f.family === selectedFamily ? "#eef2ff" : "white",
+                                color: "#4f46e5",
+                                fontWeight: 700,
+                                fontSize: 12,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {f.family === selectedFamily ? "Hide Chart" : "View Chart"}
+                            </button>
+                          )}
                         </div>
-                        <span className="confidence-text">{product.confidence}%</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`trend-indicator ${getTrendColor(product.trend)}`}>
-                        {getTrendIcon(product.trend)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="recommendation-text">{product.recommendation}</span>
-                    </td>
-                  </tr>
-                ))}
+                        {f.error && (
+                          <p style={{ color: "#dc2626", fontSize: 11, marginTop: 4 }}>{f.error}</p>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* AI Insights Section */}
+        {/* Insights */}
         <div className="insights-section">
-          <h2>AI-Generated Insights</h2>
+          <h2>Getting Started</h2>
           <div className="insights-grid">
+            <div className="insight-card info">
+              <div className="insight-header">
+                <span className="insight-icon">💡</span>
+                <h3>How It Works</h3>
+              </div>
+              <p>
+                Click "Train" on any product category to build an ML model using historical sales data.
+                Once trained, view the {steps}-day forecast chart and accuracy metrics.
+              </p>
+            </div>
+
             <div className="insight-card success">
               <div className="insight-header">
                 <span className="insight-icon">✅</span>
-                <h3>Opportunity Detected</h3>
+                <h3>Recommended Model</h3>
               </div>
-              <p>Electronics category showing 23% growth potential. Consider expanding inventory for Wireless Headphones and Smart Watches.</p>
-              <button className="insight-action">View Details →</button>
+              <p>
+                Prophet is recommended for most categories. ARIMA works well for stationary data.
+                LSTM is powerful but slower to train.
+              </p>
             </div>
 
             <div className="insight-card warning">
               <div className="insight-header">
                 <span className="insight-icon">⚠️</span>
-                <h3>Stock Alert</h3>
+                <h3>Train All</h3>
               </div>
-              <p>Premium T-Shirt predicted to have 50% sales increase. Current stock may run out in 10 days. Immediate reorder recommended.</p>
-              <button className="insight-action">Take Action →</button>
-            </div>
-
-            <div className="insight-card info">
-              <div className="insight-header">
-                <span className="insight-icon">💡</span>
-                <h3>Market Trend</h3>
-              </div>
-              <p>Seasonal pattern detected: Food & Beverages category typically sees 30% increase in next 2 weeks based on historical data.</p>
-              <button className="insight-action">Learn More →</button>
+              <p>
+                Use the "Train All Models" button to train every category at once.
+                This may take a few minutes depending on the model type.
+              </p>
             </div>
           </div>
         </div>

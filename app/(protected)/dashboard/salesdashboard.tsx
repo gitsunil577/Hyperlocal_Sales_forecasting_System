@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -14,6 +14,10 @@ import {
   Line,
 } from "recharts";
 import "./salesdashboard.css";
+import { apiClient } from "@/lib/api-client";
+import { getDisplayName } from "@/lib/product-mapping";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+import ErrorBanner from "@/app/components/ErrorBanner";
 
 /** ---------- Small UI helpers ---------- */
 const Badge = ({ children }: { children: React.ReactNode }) => (
@@ -53,7 +57,7 @@ const StatCard = ({
           <span className={changePositive ? "text-emerald-600" : "text-rose-600"}>
             {changePositive ? "↑" : "↓"} {change}
           </span>
-          <span className="text-slate-400">vs last week</span>
+          <span className="text-slate-400">vs prior period</span>
         </div>
       </div>
       <div
@@ -97,134 +101,217 @@ const AlertCard = ({
   );
 };
 
-/** ---------- Data (Demo) ---------- */
-const last7DaysSales = [
-  { day: "Mon", revenue: 3100, units: 42 },
-  { day: "Tue", revenue: 4300, units: 58 },
-  { day: "Wed", revenue: 3900, units: 51 },
-  { day: "Thu", revenue: 5600, units: 76 },
-  { day: "Fri", revenue: 5200, units: 69 },
-  { day: "Sat", revenue: 6400, units: 88 },
-  { day: "Sun", revenue: 4800, units: 61 },
-];
-
-const top5Products = [
-  { name: "Milk", units: 120 },
-  { name: "Bread", units: 92 },
-  { name: "Eggs", units: 84 },
-  { name: "Curd", units: 73 },
-  { name: "Banana", units: 66 },
-];
-
-const lowStockList = [
-  { sku: "Bread (SKU-2341)", note: "Below reorder threshold" },
-  { sku: "Curd (SKU-2210)", note: "Only 5 packs left" },
-  { sku: "Eggs (SKU-1102)", note: "Demand rising, stock low" },
-];
-
 export default function SalesDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<{ name: string; units: number }[]>([]);
+  const [productFamilies, setProductFamilies] = useState<string[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
+  const [dataSummary, setDataSummary] = useState<any>(null);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch products and summary in parallel
+      const [productsResp, summaryResp] = await Promise.all([
+        apiClient.getProducts(),
+        apiClient.getDataSummary(),
+      ]);
+
+      const families: string[] = productsResp.products || [];
+      setProductFamilies(families);
+      if (summaryResp.success) setDataSummary(summaryResp.data);
+
+      // Fetch sales data for selected product family
+      const salesResp = await apiClient.getSalesData({
+        product_family: selectedFamily,
+      });
+
+      if (salesResp.success && salesResp.data) {
+        // Take the last 7 data points for the trend chart
+        const sorted = salesResp.data.sort(
+          (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+        const last7 = sorted.slice(-7);
+        setRecentSales(
+          last7.map((r: any) => {
+            const d = new Date(r.date);
+            const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+            return { day: dayName, date: r.date, sales: Math.round(r.sales || 0) };
+          })
+        );
+      }
+
+      // Fetch sales for all families to build top 5
+      const familySalesPromises = families.map(async (family: string) => {
+        try {
+          const resp = await apiClient.getSalesData({ product_family: family });
+          if (resp.success && resp.data) {
+            // Sum the last 30 records of sales for this family
+            const sorted = resp.data.sort(
+              (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
+            const recent = sorted.slice(-30);
+            const totalUnits = recent.reduce((sum: number, r: any) => sum + (r.sales || 0), 0);
+            return { name: getDisplayName(family), units: Math.round(totalUnits) };
+          }
+          return { name: getDisplayName(family), units: 0 };
+        } catch {
+          return { name: getDisplayName(family), units: 0 };
+        }
+      });
+
+      const familySales = await Promise.all(familySalesPromises);
+      const top5 = familySales.sort((a, b) => b.units - a.units).slice(0, 5);
+      setTopProducts(top5);
+    } catch (err: any) {
+      console.error("Dashboard fetch error:", err);
+      setError(err.message || "Failed to load dashboard data. Is the backend running?");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedFamily]);
+
   const summary = useMemo(() => {
-    const today = last7DaysSales[last7DaysSales.length - 1];
+    if (!recentSales.length) {
+      return {
+        latestSales: 0,
+        totalSales: 0,
+        avgDaily: 0,
+        bestProductName: topProducts[0]?.name || "N/A",
+        bestProductUnits: topProducts[0]?.units || 0,
+        productCount: productFamilies.length,
+      };
+    }
 
-    const thisWeekRevenue = last7DaysSales.reduce((s, d) => s + d.revenue, 0);
-    const lastWeekRevenue = Math.round(thisWeekRevenue * 0.88);
-    const weekChangePct =
-      lastWeekRevenue === 0 ? 0 : Math.round(((thisWeekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100);
+    const latestSales = recentSales[recentSales.length - 1]?.sales || 0;
+    const totalSales = recentSales.reduce((s, d) => s + d.sales, 0);
+    const avgDaily = Math.round(totalSales / recentSales.length);
 
-    const bestProduct = top5Products[0];
-
-    const thisWeekUnits = last7DaysSales.reduce((s, d) => s + d.units, 0);
-    const next7DaysForecastUnits = Math.round(thisWeekUnits * 1.06);
-    const forecastDailyAvg = Math.round(next7DaysForecastUnits / 7);
+    // Compare first half vs second half for trend
+    const mid = Math.floor(recentSales.length / 2);
+    const firstHalf = recentSales.slice(0, mid).reduce((s, d) => s + d.sales, 0);
+    const secondHalf = recentSales.slice(mid).reduce((s, d) => s + d.sales, 0);
+    const changePct = firstHalf > 0 ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100) : 0;
 
     return {
-      todayRevenue: today.revenue,
-      todayUnits: today.units,
-      weekChangePct,
-      bestProductName: bestProduct.name,
-      bestProductUnits: bestProduct.units,
-      lowStockCount: lowStockList.length,
-      next7DaysForecastUnits,
-      forecastDailyAvg,
+      latestSales,
+      totalSales,
+      avgDaily,
+      changePct,
+      bestProductName: topProducts[0]?.name || "N/A",
+      bestProductUnits: topProducts[0]?.units || 0,
+      productCount: productFamilies.length,
     };
-  }, []);
+  }, [recentSales, topProducts, productFamilies]);
+
+  if (loading) return <LoadingSpinner message="Loading dashboard data from backend..." />;
+  if (error) return <ErrorBanner message={error} onRetry={fetchDashboardData} />;
 
   return (
     <div className="w-full">
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
-            Vendor Dashboard
-          </h1>
-          <p className="text-sm text-slate-600">
-            Daily sales, weekly comparison, product performance, stock alerts & forecast.
-          </p>
+        <div className="mb-8 flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
+              Vendor Dashboard
+            </h1>
+            <p className="text-sm text-slate-600">
+              Live data from backend API — sales, product performance & forecasts.
+            </p>
+          </div>
+
+          {/* Product Family Selector */}
+          <select
+            value={selectedFamily}
+            onChange={(e) => setSelectedFamily(e.target.value)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 12,
+              border: "1px solid #e2e8f0",
+              fontWeight: 700,
+              fontSize: 14,
+              color: "#0f172a",
+              background: "white",
+            }}
+          >
+            {productFamilies.map((f) => (
+              <option key={f} value={f}>
+                {getDisplayName(f)}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-8">
-          {/* KPI Cards (Vendor Requirements) */}
+          {/* KPI Cards */}
           <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
             <StatCard
-              title="Today’s Sales"
-              value={`₹${summary.todayRevenue.toLocaleString("en-IN")} • ${summary.todayUnits} units`}
-              change="+"
+              title="Latest Day Sales"
+              value={`${summary.latestSales.toLocaleString()} units`}
+              change={`${getDisplayName(selectedFamily)}`}
               changePositive
               accent="from-cyan-500 to-blue-600"
               icon={<span role="img" aria-label="money">💰</span>}
             />
             <StatCard
-              title="This Week vs Last Week"
-              value={`${summary.weekChangePct}%`}
-              change={`${summary.weekChangePct >= 0 ? "+" : ""}${summary.weekChangePct}%`}
-              changePositive={summary.weekChangePct >= 0}
+              title="7-Day Total"
+              value={`${summary.totalSales.toLocaleString()} units`}
+              change={`${(summary as any).changePct ?? 0}%`}
+              changePositive={((summary as any).changePct ?? 0) >= 0}
               accent="from-emerald-500 to-lime-600"
               icon={<span role="img" aria-label="trend">📈</span>}
             />
             <StatCard
-              title="Best-selling product (today)"
+              title="Best-Selling Category"
               value={summary.bestProductName}
-              change={`${summary.bestProductUnits} units (top list)`}
+              change={`${summary.bestProductUnits.toLocaleString()} units (30d)`}
               changePositive
               accent="from-purple-500 to-fuchsia-600"
               icon={<span role="img" aria-label="star">⭐</span>}
             />
             <StatCard
-              title="Low stock alerts"
-              value={`${summary.lowStockCount}`}
-              change="Needs attention"
-              changePositive={false}
+              title="Product Categories"
+              value={`${summary.productCount}`}
+              change="Perishable items tracked"
+              changePositive
               accent="from-amber-500 to-orange-600"
-              icon={<span role="img" aria-label="alert">⚠️</span>}
+              icon={<span role="img" aria-label="products">📦</span>}
             />
             <StatCard
-              title="Next 7 days forecast"
-              value={`${summary.next7DaysForecastUnits} units`}
-              change={`~${summary.forecastDailyAvg}/day`}
+              title="Avg Daily Demand"
+              value={`${summary.avgDaily} units`}
+              change={`${getDisplayName(selectedFamily)}`}
               changePositive
               accent="from-sky-500 to-indigo-600"
               icon={<span role="img" aria-label="forecast">🔮</span>}
             />
           </section>
 
-          {/* Mini Trend + Alerts */}
+          {/* Mini Trend + Info */}
           <section className="grid gap-6 xl:grid-cols-3">
             {/* Mini trend chart (line) */}
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 xl:col-span-2 transition-all duration-300 hover:shadow-lg">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Mini Trend (Last 7 days)
+                  Sales Trend — {getDisplayName(selectedFamily)} (Last 7 data points)
                 </h2>
                 <div className="flex items-center gap-2 text-xs">
-                  <Badge>Revenue</Badge>
-                  <span className="text-slate-400">•</span>
-                  <span className="text-slate-500">₹</span>
+                  <Badge>Units Sold</Badge>
                 </div>
               </div>
 
               <div className="w-full rounded-xl bg-gradient-to-b from-indigo-50 to-white p-4" style={{ height: "300px" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={last7DaysSales}>
+                  <LineChart data={recentSales}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="day" stroke="#64748b" />
                     <YAxis stroke="#64748b" />
@@ -236,25 +323,40 @@ export default function SalesDashboard() {
                         boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                       }}
                     />
-                    <Line type="monotone" dataKey="revenue" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="sales" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Low stock alerts list */}
+            {/* Data Info */}
             <div className="space-y-4">
-              <h2 className="px-1 text-lg font-semibold text-slate-900">Low Stock Alerts</h2>
-              <div className="space-y-3">
-                {lowStockList.map((item) => (
+              <h2 className="px-1 text-lg font-semibold text-slate-900">Dataset Info</h2>
+              {dataSummary ? (
+                <div className="space-y-3">
                   <AlertCard
-                    key={item.sku}
-                    title="Low Stock"
-                    desc={`${item.sku} • ${item.note}`}
-                    tone="rose"
+                    title="Total Records"
+                    desc={`${dataSummary.total_records?.toLocaleString() || "N/A"} sales records in dataset`}
+                    tone="sky"
                   />
-                ))}
-              </div>
+                  <AlertCard
+                    title="Product Families"
+                    desc={`${dataSummary.num_families || productFamilies.length} perishable categories tracked`}
+                    tone="amber"
+                  />
+                  <AlertCard
+                    title="Date Range"
+                    desc={`${dataSummary.date_range?.start || "N/A"} to ${dataSummary.date_range?.end || "N/A"}`}
+                    tone="sky"
+                  />
+                </div>
+              ) : (
+                <AlertCard
+                  title="Tip"
+                  desc="Train a model in the Forecast page to unlock predictions and inventory alerts."
+                  tone="amber"
+                />
+              )}
             </div>
           </section>
 
@@ -263,16 +365,16 @@ export default function SalesDashboard() {
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 transition-all duration-300 hover:shadow-lg">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Top 5 Products</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">Top Product Categories</h2>
                   <p className="text-sm text-slate-500 mt-1">
-                    Most sold products by units (last 7 days)
+                    Most sold categories by units (last 30 data points per category)
                   </p>
                 </div>
               </div>
 
               <div className="w-full rounded-xl bg-gradient-to-b from-slate-50 to-white p-4" style={{ height: "350px" }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={top5Products}>
+                  <BarChart data={topProducts}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="name" stroke="#64748b" />
                     <YAxis stroke="#64748b" />
@@ -296,7 +398,7 @@ export default function SalesDashboard() {
 
       <footer className="mx-auto max-w-7xl px-4 py-8 text-center">
         <p className="text-xs text-slate-500">
-          Vendor Dashboard • Replace demo data with live API data
+          Vendor Dashboard — Live data from Flask backend API
         </p>
       </footer>
     </div>

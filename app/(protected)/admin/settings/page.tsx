@@ -86,8 +86,8 @@ export default function AdminSettingsPage() {
     <div style={{ padding: 24, position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a" }}>Admin Settings</h1>
-          <p style={{ marginTop: 6, color: "#64748b", fontWeight: 600 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Admin Settings</h1>
+          <p style={{ marginTop: 6, color: "#94a3b8", fontWeight: 500, fontSize: 14 }}>
             Configure forecasting + inventory defaults (frontend now, DB later).
           </p>
         </div>
@@ -100,7 +100,7 @@ export default function AdminSettingsPage() {
               border: "1px solid #e2e8f0",
               background: "white",
               padding: "10px 12px",
-              fontWeight: 900,
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
@@ -116,7 +116,7 @@ export default function AdminSettingsPage() {
               background: dirty ? "#4f46e5" : "#a5b4fc",
               color: "white",
               padding: "10px 12px",
-              fontWeight: 900,
+              fontWeight: 800,
               cursor: dirty ? "pointer" : "not-allowed",
             }}
           >
@@ -226,7 +226,7 @@ export default function AdminSettingsPage() {
             color: "white",
             padding: "12px 14px",
             borderRadius: 12,
-            fontWeight: 900,
+            fontWeight: 800,
             boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
             zIndex: 9999,
           }}
@@ -254,12 +254,12 @@ function Card({
       style={{
         gridColumn: `span ${colSpan}`,
         background: "white",
-        borderRadius: 16,
+        borderRadius: 12,
         padding: 16,
-        boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
-      <div style={{ fontSize: 16, fontWeight: 900, color: "#0f172a" }}>{title}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{title}</div>
       <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>{subtitle}</div>
       <div style={{ marginTop: 12 }}>{children}</div>
     </div>
@@ -279,7 +279,7 @@ function Field({
 }) {
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 900, color: "#334155" }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#334155" }}>{label}</div>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -309,7 +309,7 @@ function NumberField({
 }) {
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 900, color: "#334155" }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#334155" }}>{label}</div>
       <input
         type="number"
         value={value}
@@ -344,7 +344,7 @@ function Select({
 }) {
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 900, color: "#334155" }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#334155" }}>{label}</div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -382,7 +382,7 @@ function ToggleRow({
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "10px 0" }}>
       <div>
-        <div style={{ fontWeight: 900, color: "#0f172a" }}>{label}</div>
+        <div style={{ fontWeight: 800, color: "#0f172a" }}>{label}</div>
         <div style={{ marginTop: 4, fontWeight: 700, color: "#64748b", fontSize: 12 }}>{desc}</div>
       </div>
 

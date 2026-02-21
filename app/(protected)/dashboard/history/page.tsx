@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import { apiClient } from "@/lib/api-client";
+import { getDisplayName } from "@/lib/product-mapping";
 
 type HistoryItem = {
   productId: string;
@@ -83,6 +85,37 @@ export default function SalesHistoryPage() {
   const [q, setQ] = useState<string>("");
 
   const [data, setData] = useState<HistoryEntry[]>([]);
+
+  // Backend data state
+  const [tab, setTab] = useState<"local" | "backend">("local");
+  const [productFamilies, setProductFamilies] = useState<string[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
+  const [backendData, setBackendData] = useState<any[]>([]);
+  const [backendLoading, setBackendLoading] = useState(false);
+
+  // Load product families
+  useEffect(() => {
+    apiClient.getProducts()
+      .then((resp) => { if (resp.products) setProductFamilies(resp.products); })
+      .catch(() => {});
+  }, []);
+
+  // Fetch backend sales data when tab or family changes
+  useEffect(() => {
+    if (tab !== "backend") return;
+    setBackendLoading(true);
+    apiClient.getSalesData({ product_family: selectedFamily })
+      .then((resp) => {
+        if (resp.success && resp.data) {
+          const sorted = resp.data.sort(
+            (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setBackendData(sorted.slice(0, 100)); // show last 100 records
+        }
+      })
+      .catch(() => setBackendData([]))
+      .finally(() => setBackendLoading(false));
+  }, [tab, selectedFamily]);
 
   // Load saved history
   useEffect(() => {
@@ -171,8 +204,8 @@ export default function SalesHistoryPage() {
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a" }}>Sales History</h1>
-          <p style={{ marginTop: 6, color: "#64748b" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Sales History</h1>
+          <p style={{ marginTop: 6, fontSize: 14, color: "#94a3b8", fontWeight: 500 }}>
             View sales records by date range (7 days, 1 week, 1 month, custom) and export as CSV.
           </p>
         </div>
@@ -187,7 +220,7 @@ export default function SalesHistoryPage() {
               background: "#4f46e5",
               color: "white",
               padding: "10px 12px",
-              fontWeight: 900,
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
@@ -203,7 +236,7 @@ export default function SalesHistoryPage() {
               background: "#fee2e2",
               color: "#991b1b",
               padding: "10px 12px",
-              fontWeight: 900,
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
@@ -212,8 +245,95 @@ export default function SalesHistoryPage() {
         </div>
       </div>
 
+      {/* Tab Switcher */}
+      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+        <button
+          onClick={() => setTab("local")}
+          type="button"
+          style={{
+            padding: "10px 20px",
+            borderRadius: 999,
+            border: tab === "local" ? "1px solid #4f46e5" : "1px solid #e2e8f0",
+            background: tab === "local" ? "#4f46e5" : "white",
+            color: tab === "local" ? "white" : "#0f172a",
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          Local History
+        </button>
+        <button
+          onClick={() => setTab("backend")}
+          type="button"
+          style={{
+            padding: "10px 20px",
+            borderRadius: 999,
+            border: tab === "backend" ? "1px solid #4f46e5" : "1px solid #e2e8f0",
+            background: tab === "backend" ? "#4f46e5" : "white",
+            color: tab === "backend" ? "white" : "#0f172a",
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          Backend Dataset
+        </button>
+      </div>
+
+      {tab === "backend" ? (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>Product Family</label>
+                <select
+                  value={selectedFamily}
+                  onChange={(e) => setSelectedFamily(e.target.value)}
+                  style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px", fontWeight: 700 }}
+                >
+                  {productFamilies.map((f) => (
+                    <option key={f} value={f}>{getDisplayName(f)}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
+                Showing last 100 records
+              </div>
+            </div>
+
+            {backendLoading ? (
+              <div style={{ padding: 24, textAlign: "center", color: "#64748b", fontWeight: 700 }}>Loading backend data...</div>
+            ) : backendData.length === 0 ? (
+              <div style={{ color: "#64748b", fontWeight: 700 }}>No data found. Make sure the backend is running.</div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 8px", minWidth: 600 }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "#64748b", fontSize: 13 }}>
+                      <th style={{ padding: "0 10px" }}>Date</th>
+                      <th style={{ padding: "0 10px" }}>Product Family</th>
+                      <th style={{ padding: "0 10px" }}>Sales (units)</th>
+                      <th style={{ padding: "0 10px" }}>On Promotion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {backendData.map((r: any, idx: number) => (
+                      <tr key={idx} style={{ background: "#f8fafc" }}>
+                        <td style={{ padding: 10, borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>{r.date}</td>
+                        <td style={{ padding: 10, fontWeight: 700, color: "#334155" }}>{getDisplayName(selectedFamily)}</td>
+                        <td style={{ padding: 10, fontWeight: 800, color: "#0f172a" }}>{Math.round(r.sales || 0)}</td>
+                        <td style={{ padding: 10, fontWeight: 700, color: "#64748b" }}>{r.onpromotion ?? "N/A"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Filters */}
-      <div style={{ marginTop: 16, background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
+      <div style={{ marginTop: 16, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>Range</label>
@@ -280,15 +400,15 @@ export default function SalesHistoryPage() {
           <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
             Total Units: {totals.totalUnits}
           </div>
-          <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", padding: "10px 12px", borderRadius: 12, fontWeight: 900, color: "#3730a3" }}>
+          <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#3730a3" }}>
             Total Amount: ₹ {totals.totalAmount.toFixed(2)}
           </div>
         </div>
       </div>
 
       {/* Table */}
-      <div style={{ marginTop: 16, background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
-        <h2 style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}>Records</h2>
+      <div style={{ marginTop: 16, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Records</h2>
 
         {filtered.length === 0 ? (
           <div style={{ marginTop: 12, color: "#64748b", fontWeight: 600 }}>
@@ -309,7 +429,7 @@ export default function SalesHistoryPage() {
               <tbody>
                 {filtered.map((entry) => (
                   <tr key={entry.id} style={{ background: "#f8fafc" }}>
-                    <td style={{ padding: 12, borderRadius: 12, fontWeight: 900, color: "#0f172a" }}>
+                    <td style={{ padding: 12, borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
                       {formatDate(entry.saleDate)}
                       <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>{entry.saleDate}</div>
                     </td>
@@ -344,8 +464,8 @@ export default function SalesHistoryPage() {
                       </div>
                     </td>
 
-                    <td style={{ padding: 12, fontWeight: 900, color: "#0f172a" }}>{entry.totalUnits}</td>
-                    <td style={{ padding: 12, fontWeight: 900, color: "#0f172a" }}>₹ {entry.totalAmount.toFixed(2)}</td>
+                    <td style={{ padding: 12, fontWeight: 800, color: "#0f172a" }}>{entry.totalUnits}</td>
+                    <td style={{ padding: 12, fontWeight: 800, color: "#0f172a" }}>₹ {entry.totalAmount.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -353,6 +473,8 @@ export default function SalesHistoryPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

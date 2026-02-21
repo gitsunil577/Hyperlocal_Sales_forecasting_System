@@ -13,278 +13,253 @@ import {
   Bar,
   Legend,
 } from "recharts";
-
-type HistoryItem = {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-};
-
-type HistoryEntry = {
-  id: number;
-  saleDate: string; // YYYY-MM-DD
-  note?: string;
-  items: HistoryItem[];
-  totalUnits: number;
-  totalAmount: number;
-};
-
-const HISTORY_KEY = "sf_sales_history_v1";
-
-type Preset = "7d" | "1m" | "custom";
-
-function parseISO(d: string) {
-  return new Date(d + "T00:00:00");
-}
-
-function toISO(date: Date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function todayISO() {
-  return toISO(new Date());
-}
-
-function daysAgoISO(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return toISO(d);
-}
+import { apiClient } from "@/lib/api-client";
+import { getDisplayName } from "@/lib/product-mapping";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+import ErrorBanner from "@/app/components/ErrorBanner";
 
 function weekdayShort(iso: string) {
-  return parseISO(iso).toLocaleDateString(undefined, { weekday: "short" });
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { weekday: "short" });
+  } catch {
+    return iso;
+  }
 }
 
 export default function VendorAnalyticsPage() {
-  const [preset, setPreset] = useState<Preset>("7d");
-  const [from, setFrom] = useState<string>(daysAgoISO(6));
-  const [to, setTo] = useState<string>(todayISO());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [productFamilies, setProductFamilies] = useState<string[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
+  const [salesData, setSalesData] = useState<any[]>([]);
+  const [numDays, setNumDays] = useState(30);
 
-  const [data, setData] = useState<HistoryEntry[]>([]);
-
-  // Load history
-  useEffect(() => {
+  const fetchData = async () => {
     try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setData(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setData([]);
-    }
-  }, []);
+      setLoading(true);
+      setError(null);
 
-  // Preset -> date range
-  useEffect(() => {
-    if (preset === "7d") {
-      setFrom(daysAgoISO(6));
-      setTo(todayISO());
-    }
-    if (preset === "1m") {
-      setFrom(daysAgoISO(30));
-      setTo(todayISO());
-    }
-  }, [preset]);
+      // Fetch products if not loaded yet
+      if (productFamilies.length === 0) {
+        const prodResp = await apiClient.getProducts();
+        if (prodResp.products) setProductFamilies(prodResp.products);
+      }
 
-  const filtered = useMemo(() => {
-    const f = parseISO(from);
-    const t = parseISO(to);
-    return data
-      .filter((e) => {
-        const d = parseISO(e.saleDate);
-        return d >= f && d <= t;
-      })
-      .sort((a, b) => (a.saleDate > b.saleDate ? 1 : -1));
-  }, [data, from, to]);
-
-  // KPI + Aggregations
-  const analytics = useMemo(() => {
-    const totalRevenue = filtered.reduce((a, e) => a + (e.totalAmount || 0), 0);
-    const totalUnits = filtered.reduce((a, e) => a + (e.totalUnits || 0), 0);
-
-    const uniqueDays = new Set(filtered.map((e) => e.saleDate)).size || 1;
-    const avgDailyRevenue = totalRevenue / uniqueDays;
-
-    // best product by revenue
-    const productRevenue = new Map<string, { name: string; revenue: number; units: number }>();
-    filtered.forEach((entry) => {
-      entry.items.forEach((it) => {
-        const key = it.productId || it.productName;
-        const prev = productRevenue.get(key) || { name: it.productName, revenue: 0, units: 0 };
-        productRevenue.set(key, {
-          name: it.productName,
-          revenue: prev.revenue + (it.total || 0),
-          units: prev.units + (it.quantity || 0),
-        });
+      // Fetch sales data for the selected family
+      const resp = await apiClient.getSalesData({
+        product_family: selectedFamily,
       });
-    });
 
-    let best = { name: "—", revenue: 0, units: 0 };
-    for (const v of productRevenue.values()) {
-      if (v.revenue > best.revenue) best = v;
+      if (resp.success && resp.data) {
+        // Sort by date and take the last N days
+        const sorted = resp.data.sort(
+          (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+        const recent = sorted.slice(-numDays);
+        setSalesData(recent);
+      } else {
+        setSalesData([]);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to load analytics data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [selectedFamily, numDays]);
+
+  // Compute analytics from API data
+  const analytics = useMemo(() => {
+    if (!salesData.length) {
+      return {
+        totalSales: 0,
+        totalDays: 0,
+        avgDaily: 0,
+        maxDay: { date: "—", sales: 0 },
+        dailyTrend: [],
+        salesByWeekday: [],
+      };
     }
 
-    // Daily revenue series
-    const dailyRevenue = filtered.map((e) => ({
-      date: e.saleDate,
-      revenue: Number((e.totalAmount || 0).toFixed(2)),
-      units: e.totalUnits || 0,
+    const totalSales = salesData.reduce((a: number, e: any) => a + (e.sales || 0), 0);
+    const totalDays = salesData.length;
+    const avgDaily = totalSales / totalDays;
+
+    // Max day
+    const maxDay = salesData.reduce(
+      (best: any, e: any) => ((e.sales || 0) > best.sales ? { date: e.date, sales: e.sales } : best),
+      { date: "—", sales: 0 }
+    );
+
+    // Daily trend chart data
+    const dailyTrend = salesData.map((e: any) => ({
+      date: e.date,
+      sales: Math.round(e.sales || 0),
     }));
 
-    // Top products by revenue
-    const topProducts = Array.from(productRevenue.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 8)
-      .map((p) => ({
-        product: p.name.length > 16 ? p.name.slice(0, 16) + "…" : p.name,
-        revenue: Number(p.revenue.toFixed(2)),
-        units: p.units,
-      }));
-
-    // Revenue by weekday
+    // Aggregate by weekday
     const weekdayAgg = new Map<string, number>();
-    filtered.forEach((e) => {
-      const w = weekdayShort(e.saleDate);
-      weekdayAgg.set(w, (weekdayAgg.get(w) || 0) + (e.totalAmount || 0));
+    salesData.forEach((e: any) => {
+      const w = weekdayShort(e.date);
+      weekdayAgg.set(w, (weekdayAgg.get(w) || 0) + (e.sales || 0));
     });
 
     const weekdayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const revenueByWeekday = weekdayOrder.map((w) => ({
+    const salesByWeekday = weekdayOrder.map((w) => ({
       weekday: w,
-      revenue: Number(((weekdayAgg.get(w) || 0)).toFixed(2)),
+      sales: Math.round(weekdayAgg.get(w) || 0),
     }));
 
-    return {
-      totalRevenue,
-      totalUnits,
-      avgDailyRevenue,
-      bestProduct: best,
-      dailyRevenue,
-      topProducts,
-      revenueByWeekday,
-      daysCount: uniqueDays,
-    };
-  }, [filtered]);
+    return { totalSales, totalDays, avgDaily, maxDay, dailyTrend, salesByWeekday };
+  }, [salesData]);
+
+  if (loading) return <LoadingSpinner message="Loading analytics..." />;
+  if (error) return <ErrorBanner message={error} onRetry={fetchData} />;
 
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a" }}>Analytics</h1>
-          <p style={{ marginTop: 6, color: "#64748b", fontWeight: 600 }}>
-            Charts are generated from Sales History stored locally (for now).
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Analytics</h1>
+          <p style={{ marginTop: 6, color: "#94a3b8", fontWeight: 500, fontSize: 14 }}>
+            Sales analytics from backend data — {getDisplayName(selectedFamily)}
           </p>
         </div>
 
         {/* Filters */}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 900, color: "#334155" }}>
-              Range
+            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>
+              Product Family
             </label>
             <select
-              value={preset}
-              onChange={(e) => setPreset(e.target.value as Preset)}
-              style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px", background: "white" }}
+              value={selectedFamily}
+              onChange={(e) => setSelectedFamily(e.target.value)}
+              style={{
+                marginTop: 8,
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "10px 12px",
+                background: "white",
+                fontWeight: 700,
+              }}
             >
-              <option value="7d">Last 7 Days</option>
-              <option value="1m">Last 1 Month</option>
-              <option value="custom">Custom</option>
+              {productFamilies.map((f) => (
+                <option key={f} value={f}>
+                  {getDisplayName(f)}
+                </option>
+              ))}
             </select>
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 900, color: "#334155" }}>
-              From
+            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>
+              Period
             </label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => {
-                setPreset("custom");
-                setFrom(e.target.value);
+            <select
+              value={numDays}
+              onChange={(e) => setNumDays(Number(e.target.value))}
+              style={{
+                marginTop: 8,
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "10px 12px",
+                background: "white",
+                fontWeight: 700,
               }}
-              style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px" }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 900, color: "#334155" }}>
-              To
-            </label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => {
-                setPreset("custom");
-                setTo(e.target.value);
-              }}
-              style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px" }}
-            />
+            >
+              <option value={7}>Last 7 days</option>
+              <option value={30}>Last 30 days</option>
+              <option value={90}>Last 90 days</option>
+              <option value={365}>Last year</option>
+            </select>
           </div>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div style={{ marginTop: 16, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        <KPI title="Total Revenue" value={`₹ ${analytics.totalRevenue.toFixed(2)}`} subtitle={`${analytics.daysCount} day(s)`} />
-        <KPI title="Total Units" value={`${analytics.totalUnits}`} subtitle="Units sold" />
-        <KPI title="Avg Daily Revenue" value={`₹ ${analytics.avgDailyRevenue.toFixed(2)}`} subtitle="Per day" />
-        <KPI title="Best-selling Product" value={analytics.bestProduct.name} subtitle={`₹ ${analytics.bestProduct.revenue.toFixed(2)}`} />
+      <div
+        style={{
+          marginTop: 16,
+          display: "grid",
+          gap: 20,
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+        }}
+      >
+        <KPI
+          title="Total Sales"
+          value={`${Math.round(analytics.totalSales).toLocaleString()} units`}
+          subtitle={`${analytics.totalDays} data points`}
+        />
+        <KPI
+          title="Avg Daily Sales"
+          value={`${Math.round(analytics.avgDaily).toLocaleString()} units`}
+          subtitle="Per day"
+        />
+        <KPI
+          title="Peak Day"
+          value={`${Math.round(analytics.maxDay.sales).toLocaleString()} units`}
+          subtitle={analytics.maxDay.date}
+        />
+        <KPI
+          title="Category"
+          value={getDisplayName(selectedFamily)}
+          subtitle="Selected product family"
+        />
       </div>
 
-      {filtered.length === 0 ? (
-        <div style={{ marginTop: 16, background: "white", padding: 16, borderRadius: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)", color: "#64748b", fontWeight: 700 }}>
-          No sales data found for this range. Add data from <b>Add Daily Sales</b>.
+      {salesData.length === 0 ? (
+        <div
+          style={{
+            marginTop: 16,
+            background: "white",
+            padding: 16,
+            borderRadius: 12,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+            color: "#64748b",
+            fontWeight: 700,
+          }}
+        >
+          No sales data found for this category. Make sure the backend is running and has data loaded.
         </div>
       ) : (
-        <div style={{ marginTop: 16, display: "grid", gap: 16, gridTemplateColumns: "repeat(12, 1fr)" }}>
-          {/* Daily Revenue Trend */}
-          <Card title="Daily Revenue Trend" subtitle="Revenue per day" colSpan={8}>
+        <div
+          style={{
+            marginTop: 16,
+            display: "grid",
+            gap: 16,
+            gridTemplateColumns: "repeat(12, 1fr)",
+          }}
+        >
+          {/* Daily Sales Trend */}
+          <Card title="Daily Sales Trend" subtitle={`${getDisplayName(selectedFamily)} — units sold per day`} colSpan={8}>
             <div style={{ height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.dailyRevenue}>
+                <LineChart data={analytics.dailyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="revenue" strokeWidth={3} dot={false} />
+                  <Line type="monotone" dataKey="sales" strokeWidth={2} dot={false} name="Units Sold" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
-          {/* Revenue by Weekday */}
-          <Card title="Revenue by Weekday" subtitle="Which days perform better" colSpan={4}>
+          {/* Sales by Weekday */}
+          <Card title="Sales by Weekday" subtitle="Which days have higher demand" colSpan={4}>
             <div style={{ height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.revenueByWeekday}>
+                <BarChart data={analytics.salesByWeekday}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="weekday" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="revenue" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {/* Top Products */}
-          <Card title="Top Products by Revenue" subtitle="Top contributors in selected range" colSpan={12}>
-            <div style={{ height: 340 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.topProducts}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="product" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="revenue" />
+                  <Bar dataKey="sales" name="Units Sold" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -297,9 +272,18 @@ export default function VendorAnalyticsPage() {
 
 function KPI({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (
-    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 12px rgba(0,0,0,0.06)" }}>
-      <div style={{ color: "#64748b", fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>{title}</div>
-      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{value}</div>
+    <div
+      style={{
+        background: "white",
+        borderRadius: 12,
+        padding: 16,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+      }}
+    >
+      <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
+        {title}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{value}</div>
       <div style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>{subtitle}</div>
     </div>
   );
@@ -321,16 +305,14 @@ function Card({
       style={{
         gridColumn: `span ${colSpan}`,
         background: "white",
-        borderRadius: 16,
+        borderRadius: 12,
         padding: 16,
-        boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#0f172a" }}>{title}</div>
-          <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>{subtitle}</div>
-        </div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{title}</div>
+        <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>{subtitle}</div>
       </div>
       <div style={{ marginTop: 12 }}>{children}</div>
     </div>
