@@ -12,6 +12,8 @@ Complete Next.js dashboard with authentication, connected to Flask ML backend.
 - 💬 **Chatbot** - AI assistant for queries
 - 🎨 **Modern UI** - Tailwind CSS, Recharts, responsive design
 
+  
+
 ## Connected to Backend
 
 This frontend is now connected to the Flask backend API at `http://localhost:5000`.
