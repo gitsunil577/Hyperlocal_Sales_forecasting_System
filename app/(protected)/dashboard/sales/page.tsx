@@ -13,7 +13,6 @@ type SaleRow = {
   unitPrice: number;
 };
 
-// Fallback catalog; will be replaced by backend product families on load
 const FALLBACK_CATALOG = [
   { id: "p1", name: "Milk (1L)" },
   { id: "p2", name: "Bread" },
@@ -47,7 +46,6 @@ export default function DailySalesEntryPage() {
   const [submitted, setSubmitted] = useState(false);
   const [productCatalog, setProductCatalog] = useState(FALLBACK_CATALOG);
 
-  // Load product catalog from backend
   useEffect(() => {
     apiClient.getProducts()
       .then((resp) => {
@@ -59,12 +57,9 @@ export default function DailySalesEntryPage() {
           setProductCatalog(catalog);
         }
       })
-      .catch(() => {
-        // fallback to hardcoded catalog if backend not available
-      });
+      .catch(() => {});
   }, []);
 
-  // Load draft
   useEffect(() => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
@@ -107,13 +102,10 @@ export default function DailySalesEntryPage() {
 
   const validate = () => {
     if (!saleDate) return "Please select a sale date.";
-
-    // No future date
     const chosen = new Date(saleDate + "T00:00:00");
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     if (chosen > today) return "Sale date cannot be in the future.";
-
     for (const r of rows) {
       if (!r.productId) return "Please select a product in each row.";
       if (!Number.isFinite(r.quantity) || r.quantity <= 0) return "Quantity must be greater than 0.";
@@ -130,20 +122,14 @@ export default function DailySalesEntryPage() {
 
   const submit = () => {
     const err = validate();
-    if (err) {
-      setStatus(err);
-      return;
-    }
+    if (err) { setStatus(err); return; }
 
     const HISTORY_KEY = "sf_sales_history_v1";
-
     let existing: any[] = [];
     try {
       existing = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
       if (!Array.isArray(existing)) existing = [];
-    } catch {
-      existing = [];
-    }
+    } catch { existing = []; }
 
     const entry = {
       id: Date.now(),
@@ -163,7 +149,6 @@ export default function DailySalesEntryPage() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify([entry, ...existing]));
     localStorage.removeItem(DRAFT_KEY);
 
-    // Reset form and show success
     setRows([{ id: uid(), productId: "", productName: "", quantity: 1, unitPrice: 0 }]);
     setNote("");
     setSaleDate(todayISO());
@@ -171,260 +156,157 @@ export default function DailySalesEntryPage() {
     setStatus("");
   };
 
-
   return (
-    <div style={{ padding: 24 }}>
-      {/* Success Banner */}
-      {submitted && (
-        <div style={{
-          marginBottom: 20, padding: "16px 20px", borderRadius: 12,
-          background: "#ecfdf5", border: "1px solid #a7f3d0",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 18 }}>&#10003;</span>
-            <span style={{ fontWeight: 700, color: "#065f46", fontSize: 14 }}>Sales entry submitted successfully!</span>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => router.push("/dashboard/history")}
-              style={{
-                padding: "7px 16px", borderRadius: 8, border: "none",
-                background: "#059669", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer",
-              }}
-            >
-              View in History
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubmitted(false)}
-              style={{
-                padding: "7px 16px", borderRadius: 8, border: "1px solid #a7f3d0",
-                background: "transparent", color: "#065f46", fontWeight: 700, fontSize: 13, cursor: "pointer",
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="pg-page">
+      <div className="pg-container">
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Add Daily Sales</h1>
-          <p style={{ marginTop: 4, fontSize: 14, color: "#94a3b8", fontWeight: 500 }}>
-            Enter today&apos;s sales as line items. You can add multiple products in one submission.
-          </p>
-        </div>
-
-        <div style={{ minWidth: 260, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontWeight: 800, color: "#0f172a" }}>Summary</div>
-          <div style={{ marginTop: 10, color: "#334155", fontWeight: 600 }}>Total Units: {totals.totalUnits}</div>
-          <div style={{ marginTop: 6, color: "#334155", fontWeight: 600 }}>Total Amount: ₹ {totals.grandTotal.toFixed(2)}</div>
-          <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>
-            (This is calculated from Quantity × Unit Price)
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 900 }}>
-        <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155" }}>Sale Date</label>
-          <input
-            type="date"
-            value={saleDate}
-            onChange={(e) => setSaleDate(e.target.value)}
-            style={{
-              marginTop: 8,
-              width: "100%",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              padding: "10px 12px",
-              outline: "none",
-            }}
-          />
-        </div>
-
-        <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155" }}>Note (optional)</label>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Festival sale, rainy day, discount, etc."
-            style={{
-              marginTop: 8,
-              width: "100%",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              padding: "10px 12px",
-              outline: "none",
-            }}
-          />
-        </div>
-      </div>
-
-      <div style={{ marginTop: 16, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Line Items</h2>
-          <button
-            type="button"
-            onClick={addRow}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #c7d2fe",
-              background: "#eef2ff",
-              color: "#3730a3",
-              padding: "10px 12px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            + Add Row
-          </button>
-        </div>
-
-        <div style={{ marginTop: 14, overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 10px", minWidth: 760 }}>
-            <thead>
-              <tr style={{ textAlign: "left", color: "#64748b", fontSize: 13 }}>
-                <th style={{ padding: "0 10px" }}>Product</th>
-                <th style={{ padding: "0 10px", width: 140 }}>Quantity</th>
-                <th style={{ padding: "0 10px", width: 180 }}>Unit Price (₹)</th>
-                <th style={{ padding: "0 10px", width: 160 }}>Total (₹)</th>
-                <th style={{ padding: "0 10px", width: 90 }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, idx) => (
-                <tr key={r.id} style={{ background: "#f8fafc" }}>
-                  <td style={{ padding: 10, borderRadius: 12 }}>
-                    <select
-                      value={r.productId}
-                      onChange={(e) => onSelectProduct(r.id, e.target.value)}
-                      style={{
-                        width: "100%",
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "10px 12px",
-                        outline: "none",
-                        background: "white",
-                      }}
-                    >
-                      <option value="">Select product</option>
-                      {productCatalog.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
-                      Row {idx + 1}
-                    </div>
-                  </td>
-
-                  <td style={{ padding: 10 }}>
-                    <input
-                      type="number"
-                      value={r.quantity}
-                      min={1}
-                      onChange={(e) => updateRow(r.id, { quantity: Number(e.target.value) })}
-                      style={{
-                        width: "100%",
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "10px 12px",
-                        outline: "none",
-                        background: "white",
-                      }}
-                    />
-                  </td>
-
-                  <td style={{ padding: 10 }}>
-                    <input
-                      type="number"
-                      value={r.unitPrice}
-                      min={0}
-                      step="0.01"
-                      onChange={(e) => updateRow(r.id, { unitPrice: Number(e.target.value) })}
-                      style={{
-                        width: "100%",
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "10px 12px",
-                        outline: "none",
-                        background: "white",
-                      }}
-                    />
-                  </td>
-
-                  <td style={{ padding: 10, fontWeight: 800, color: "#0f172a" }}>
-                    ₹ {(totals.lineTotals[idx] ?? 0).toFixed(2)}
-                  </td>
-
-                  <td style={{ padding: 10 }}>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(r.id)}
-                      title="Remove row"
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #fecaca",
-                        background: "#fee2e2",
-                        color: "#991b1b",
-                        padding: "10px 12px",
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {status && (
-          <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: status.includes("✅") ? "#065f46" : "#92400e" }}>
-            {status}
+        {/* Success Banner */}
+        {submitted && (
+          <div className="pg-banner pg-banner-success">
+            <span>✓ Sales entry submitted successfully!</span>
+            <div className="pg-header-right">
+              <button type="button" className="pg-btn pg-btn-success pg-btn-sm" onClick={() => router.push("/dashboard/history")}>
+                View in History
+              </button>
+              <button type="button" className="pg-btn pg-btn-sm" onClick={() => setSubmitted(false)}>
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
-        <div style={{ marginTop: 14, display: "flex", gap: 12, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={saveDraft}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              background: "white",
-              color: "#0f172a",
-              padding: "12px 14px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Save Draft
-          </button>
+        {/* Page Header */}
+        <div className="pg-header">
+          <div className="pg-header-left">
+            <h1 className="pg-title">Add Daily Sales</h1>
+            <p className="pg-subtitle">Enter today&apos;s sales as line items. Add multiple products in one submission.</p>
+          </div>
 
-          <button
-            type="button"
-            onClick={submit}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #4f46e5",
-              background: "#4f46e5",
-              color: "white",
-              padding: "12px 14px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Submit Sales
-          </button>
+          {/* Summary Box */}
+          <div className="pg-kpi" style={{ minWidth: 220 }}>
+            <p className="pg-kpi-label">Summary</p>
+            <p className="pg-kpi-value">{totals.totalUnits} units</p>
+            <p className="pg-kpi-sub">₹ {totals.grandTotal.toFixed(2)} total amount</p>
+          </div>
         </div>
+
+        {/* Date + Note */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+          <div className="pg-card">
+            <div className="pg-field">
+              <label className="pg-label">Sale Date</label>
+              <input
+                type="date"
+                className="pg-input pg-input-full"
+                value={saleDate}
+                onChange={(e) => setSaleDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="pg-card">
+            <div className="pg-field">
+              <label className="pg-label">Note (optional)</label>
+              <input
+                className="pg-input pg-input-full"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Festival sale, rainy day, discount, etc."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Line Items Table */}
+        <div className="pg-card">
+          <div className="pg-card-header">
+            <div>
+              <p className="pg-card-title">Line Items</p>
+              <p className="pg-card-sub">{rows.length} row{rows.length !== 1 ? "s" : ""} added</p>
+            </div>
+            <button type="button" className="pg-btn pg-btn-primary" onClick={addRow}>
+              + Add Row
+            </button>
+          </div>
+
+          <div className="pg-table-wrap">
+            <table className="pg-table" style={{ minWidth: 760 }}>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th style={{ width: 140 }}>Quantity</th>
+                  <th style={{ width: 180 }}>Unit Price (₹)</th>
+                  <th style={{ width: 160 }}>Total (₹)</th>
+                  <th style={{ width: 90 }}>Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => (
+                  <tr key={r.id}>
+                    <td>
+                      <select
+                        className="pg-select pg-input-full"
+                        value={r.productId}
+                        onChange={(e) => onSelectProduct(r.id, e.target.value)}
+                      >
+                        <option value="">Select product</option>
+                        {productCatalog.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <div style={{ marginTop: 4, fontSize: "0.6875rem", color: "#94a3b8" }}>Row {idx + 1}</div>
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="pg-input pg-input-full"
+                        value={r.quantity}
+                        min={1}
+                        onChange={(e) => updateRow(r.id, { quantity: Number(e.target.value) })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="pg-input pg-input-full"
+                        value={r.unitPrice}
+                        min={0}
+                        step="0.01"
+                        onChange={(e) => updateRow(r.id, { unitPrice: Number(e.target.value) })}
+                      />
+                    </td>
+                    <td className="cell-bold">₹ {(totals.lineTotals[idx] ?? 0).toFixed(2)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="pg-btn pg-btn-danger pg-btn-sm"
+                        onClick={() => removeRow(r.id)}
+                        title="Remove row"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {status && (
+            <p className={`${status.includes("✅") ? "pg-status-ok" : "pg-status-err"}`} style={{ marginTop: "0.75rem" }}>
+              {status}
+            </p>
+          )}
+
+          <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <button type="button" className="pg-btn" onClick={saveDraft}>
+              Save Draft
+            </button>
+            <button type="button" className="pg-btn pg-btn-primary" onClick={submit}>
+              Submit Sales
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 // app/(protected)/layout.tsx
 import "./protected.css";
+import "./pages.css";
 import ProtectedShell from "./protected-shell";
 
 export default function ProtectedLayout({

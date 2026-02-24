@@ -75,10 +75,8 @@ export default function InventoryPage() {
   const [q, setQ] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [edit, setEdit] = useState<InventoryItem | null>(null);
-
   const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
 
-  // Backend recommendations state
   const [productFamilies, setProductFamilies] = useState<string[]>([]);
   const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
   const [recommendations, setRecommendations] = useState<any>(null);
@@ -86,18 +84,21 @@ export default function InventoryPage() {
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState<string | null>(null);
 
-  // Load product families from backend
+  const [actionPlan, setActionPlan] = useState<string | null>(null);
+  const [actionPlanLoading, setActionPlanLoading] = useState(false);
+  const [actionPlanError, setActionPlanError] = useState<string | null>(null);
+
   useEffect(() => {
     apiClient.getProducts()
-      .then((resp) => {
-        if (resp.products) setProductFamilies(resp.products);
-      })
+      .then((resp) => { if (resp.products) setProductFamilies(resp.products); })
       .catch(() => {});
   }, []);
 
   const fetchRecommendations = async () => {
     setRecLoading(true);
     setRecError(null);
+    setActionPlan(null);
+    setActionPlanError(null);
     try {
       const resp = await apiClient.getInventoryRecommendations({
         product_family: selectedFamily,
@@ -107,6 +108,15 @@ export default function InventoryPage() {
       if (resp.success) {
         setRecommendations(resp.recommendations);
         setAlerts(resp.alerts || []);
+        setActionPlanLoading(true);
+        apiClient
+          .getInventoryInsight({ product_family: selectedFamily, recommendations: resp.recommendations })
+          .then((insightResp) => {
+            if (insightResp.success) setActionPlan(insightResp.insight);
+            else setActionPlanError(insightResp.error || "Failed to generate insight");
+          })
+          .catch(() => setActionPlanError("Gemini insight unavailable — check API key"))
+          .finally(() => setActionPlanLoading(false));
       } else {
         setRecError(resp.error || "Failed to get recommendations");
       }
@@ -117,50 +127,35 @@ export default function InventoryPage() {
     }
   };
 
-  // Load admin settings
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === "object") {
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-      } else {
-        setSettings(DEFAULT_SETTINGS);
-      }
-    } catch {
-      setSettings(DEFAULT_SETTINGS);
-    }
+      setSettings(parsed && typeof parsed === "object" ? { ...DEFAULT_SETTINGS, ...parsed } : DEFAULT_SETTINGS);
+    } catch { setSettings(DEFAULT_SETTINGS); }
   }, []);
 
-  // Load inventory
   useEffect(() => {
     try {
       const raw = localStorage.getItem(INVENTORY_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       setItems(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setItems([]);
-    }
+    } catch { setItems([]); }
   }, []);
 
-  // Load sales history
   useEffect(() => {
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       setHistory(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setHistory([]);
-    }
+    } catch { setHistory([]); }
   }, []);
 
-  // Save inventory
   useEffect(() => {
     localStorage.setItem(INVENTORY_KEY, JSON.stringify(items));
   }, [items]);
 
   const computed = useMemo(() => {
-    // Aggregate units sold per product over last 7 entries
     const last7 = [...history]
       .sort((a, b) => (a.saleDate > b.saleDate ? 1 : -1))
       .slice(-7);
@@ -174,34 +169,18 @@ export default function InventoryPage() {
       });
     });
 
-    // ✅ from admin settings
     const leadTimeDays = settings.leadTimeDays ?? 3;
     const safetyDays = settings.safetyDays ?? 2;
-
-    const windowDays = 7;
 
     const rows = items.map((p) => {
       const sold = soldMap.get(p.id) || soldMap.get(p.name);
       const totalUnitsLast7 = sold?.units || 0;
-      const avgDaily = totalUnitsLast7 / windowDays;
-
-      const suggested = Math.max(
-        0,
-        Math.ceil(avgDaily * (leadTimeDays + safetyDays) - p.stock)
-      );
-
+      const avgDaily = totalUnitsLast7 / 7;
+      const suggested = Math.max(0, Math.ceil(avgDaily * (leadTimeDays + safetyDays) - p.stock));
       const lowStock = p.stock <= p.reorderPoint;
-
-      return {
-        ...p,
-        avgDaily: Number(avgDaily.toFixed(2)),
-        suggested,
-        lowStock,
-        totalUnitsLast7,
-      };
+      return { ...p, avgDaily: Number(avgDaily.toFixed(2)), suggested, lowStock, totalUnitsLast7 };
     });
 
-    // KPIs
     const lowCount = rows.filter((r) => r.lowStock).length;
     const totalValue = rows.reduce((a, r) => a + r.stock * r.unitPrice, 0);
     const totalSkus = rows.length;
@@ -212,26 +191,15 @@ export default function InventoryPage() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return computed.rows;
-
-    return computed.rows.filter((r) => {
-      return (
-        r.name.toLowerCase().includes(query) ||
-        r.sku.toLowerCase().includes(query) ||
-        r.category.toLowerCase().includes(query)
-      );
-    });
+    return computed.rows.filter((r) =>
+      r.name.toLowerCase().includes(query) ||
+      r.sku.toLowerCase().includes(query) ||
+      r.category.toLowerCase().includes(query)
+    );
   }, [q, computed.rows]);
 
-  const openAdd = () => {
-    setEdit(null);
-    setShowModal(true);
-  };
-
-  const openEdit = (p: InventoryItem) => {
-    setEdit(p);
-    setShowModal(true);
-  };
-
+  const openAdd = () => { setEdit(null); setShowModal(true); };
+  const openEdit = (p: InventoryItem) => { setEdit(p); setShowModal(true); };
   const removeItem = (id: string) => {
     if (!confirm("Delete this product?")) return;
     setItems((prev) => prev.filter((x) => x.id !== id));
@@ -239,391 +207,264 @@ export default function InventoryPage() {
 
   const onSave = (payload: Omit<InventoryItem, "id"> & { id?: string }) => {
     if (edit) {
-      setItems((prev) =>
-        prev.map((x) =>
-          x.id === edit.id ? ({ ...x, ...payload, id: edit.id } as InventoryItem) : x
-        )
-      );
+      setItems((prev) => prev.map((x) => x.id === edit.id ? ({ ...x, ...payload, id: edit.id } as InventoryItem) : x));
     } else {
-      const newItem: InventoryItem = {
-        id: uid(),
-        ...payload,
-      } as InventoryItem;
-      setItems((prev) => [newItem, ...prev]);
+      setItems((prev) => [{ id: uid(), ...payload } as InventoryItem, ...prev]);
     }
     setShowModal(false);
     setEdit(null);
   };
 
+  const lowStockRows = computed.rows.filter((r) => r.lowStock);
+
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Inventory</h1>
-          <p style={{ marginTop: 6, color: "#94a3b8", fontWeight: 500, fontSize: 14 }}>
-            Track stock, low-stock alerts, and reorder suggestions (based on last 7 sales).
-          </p>
-          <p style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>
-            Using Admin Settings → lead time: <b>{settings.leadTimeDays}</b> days, safety:{" "}
-            <b>{settings.safetyDays}</b> days
-          </p>
-        </div>
+    <div className="pg-page">
+      <div className="pg-container">
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search product / SKU / category..."
-            style={{
-              width: 320,
-              maxWidth: "100%",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              padding: "10px 12px",
-            }}
-          />
-          <button
-            onClick={openAdd}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #c7d2fe",
-              background: "#4f46e5",
-              color: "white",
-              padding: "10px 12px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            + Add Product
-          </button>
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div
-        style={{
-          marginTop: 16,
-          display: "grid",
-          gap: 20,
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-        }}
-      >
-        <KPI title="Total Products" value={`${computed.totalSkus}`} subtitle="SKUs tracked" />
-        <KPI
-          title="Low Stock Alerts"
-          value={`${computed.lowCount}`}
-          subtitle={settings.lowStockAlertsEnabled ? "Needs attention" : "Disabled by Admin"}
-        />
-        <KPI title="Inventory Value" value={`₹ ${computed.totalValue.toFixed(2)}`} subtitle="Stock × unit price" />
-        <KPI title="Reorder Tip" value="Use suggestions" subtitle="Based on last 7 sales" />
-      </div>
-
-      <div style={{ marginTop: 16, display: "grid", gap: 16, gridTemplateColumns: "repeat(12, 1fr)" }}>
-        {/* ✅ Low stock panel controlled by admin */}
-        {settings.lowStockAlertsEnabled && (
-          <Card title="Low Stock Alerts" subtitle="Products below reorder point" colSpan={4}>
-            {computed.rows.filter((r) => r.lowStock).length === 0 ? (
-              <div style={{ color: "#64748b", fontWeight: 800 }}>No low-stock alerts 🎉</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {computed.rows
-                  .filter((r) => r.lowStock)
-                  .slice(0, 6)
-                  .map((r) => (
-                    <div
-                      key={r.id}
-                      style={{
-                        border: "1px solid #fecaca",
-                        background: "#fee2e2",
-                        borderRadius: 14,
-                        padding: 12,
-                      }}
-                    >
-                      <div style={{ fontWeight: 800, color: "#991b1b" }}>{r.name}</div>
-                      <div style={{ marginTop: 6, fontSize: 13, color: "#7f1d1d", fontWeight: 800 }}>
-                        Stock: {r.stock} • Reorder Point: {r.reorderPoint}
-                      </div>
-                      <div style={{ marginTop: 6, fontSize: 13, color: "#7f1d1d", fontWeight: 800 }}>
-                        Suggested reorder: <b>{r.suggested}</b>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* Table */}
-        <Card
-          title="Products"
-          subtitle="Stock + reorder suggestion"
-          colSpan={settings.lowStockAlertsEnabled ? 8 : 12}
-        >
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "separate",
-                borderSpacing: "0 10px",
-                minWidth: 900,
-              }}
-            >
-              <thead>
-                <tr style={{ textAlign: "left", color: "#64748b", fontSize: 13 }}>
-                  <th style={{ padding: "0 10px" }}>Product</th>
-                  <th style={{ padding: "0 10px" }}>SKU</th>
-                  <th style={{ padding: "0 10px" }}>Category</th>
-                  <th style={{ padding: "0 10px" }}>Stock</th>
-                  <th style={{ padding: "0 10px" }}>Reorder Point</th>
-                  <th style={{ padding: "0 10px" }}>Avg Daily (7d)</th>
-                  <th style={{ padding: "0 10px" }}>Suggested Reorder</th>
-                  <th style={{ padding: "0 10px", width: 180 }}>Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filtered.map((r) => (
-                  <tr
-                    key={r.id}
-                    style={{
-                      background:
-                        settings.lowStockAlertsEnabled && r.lowStock ? "#fff1f2" : "#f8fafc",
-                    }}
-                  >
-                    <td style={{ padding: 12, borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
-                      {r.name}
-                      <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
-                        Unit price: ₹ {r.unitPrice}
-                      </div>
-                    </td>
-                    <td style={{ padding: 12, fontWeight: 800, color: "#334155" }}>{r.sku}</td>
-                    <td style={{ padding: 12, fontWeight: 800, color: "#334155" }}>{r.category}</td>
-
-                    <td style={{ padding: 12 }}>
-                      <Pill
-                        text={`${r.stock}`}
-                        tone={settings.lowStockAlertsEnabled && r.lowStock ? "rose" : "slate"}
-                      />
-                    </td>
-
-                    <td style={{ padding: 12 }}>
-                      <Pill text={`${r.reorderPoint}`} tone="indigo" />
-                    </td>
-
-                    <td style={{ padding: 12, fontWeight: 800, color: "#0f172a" }}>
-                      {r.avgDaily}
-                      <div style={{ marginTop: 4, fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-                        Sold (7 entries): {r.totalUnitsLast7}
-                      </div>
-                    </td>
-
-                    <td style={{ padding: 12 }}>
-                      <Pill text={`${r.suggested}`} tone={r.suggested > 0 ? "emerald" : "slate"} />
-                    </td>
-
-                    <td style={{ padding: 12, display: "flex", gap: 10 }}>
-                      <button type="button" onClick={() => openEdit(r)} style={btnBase}>
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => removeItem(r.id)}
-                        style={{
-                          ...btnBase,
-                          border: "1px solid #fecaca",
-                          background: "#fee2e2",
-                          color: "#991b1b",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {filtered.length === 0 && (
-              <div style={{ marginTop: 10, color: "#64748b", fontWeight: 800 }}>
-                No products found.
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Backend AI Recommendations Section */}
-      <div style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "end" }}>
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>AI-Powered Recommendations</h2>
-            <p style={{ marginTop: 4, color: "#64748b", fontWeight: 600, fontSize: 13 }}>
-              Get inventory recommendations from the ML backend for perishable products.
+        {/* Header */}
+        <div className="pg-header">
+          <div className="pg-header-left">
+            <h1 className="pg-title">Inventory</h1>
+            <p className="pg-subtitle">
+              Track stock, low-stock alerts, and reorder suggestions (based on last 7 sales).
+              Lead time: <b>{settings.leadTimeDays}</b>d · Safety: <b>{settings.safetyDays}</b>d
             </p>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#64748b", marginBottom: 6 }}>
-                Product Family
-              </label>
-              <select
-                value={selectedFamily}
-                onChange={(e) => setSelectedFamily(e.target.value)}
-                style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e2e8f0", fontWeight: 700 }}
-              >
-                {productFamilies.map((f) => (
-                  <option key={f} value={f}>{getEmoji(f)} {getDisplayName(f)}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={fetchRecommendations}
-              disabled={recLoading}
-              type="button"
-              style={{
-                padding: "10px 20px",
-                borderRadius: 10,
-                border: "none",
-                background: recLoading ? "#94a3b8" : "#059669",
-                color: "white",
-                fontWeight: 800,
-                cursor: recLoading ? "wait" : "pointer",
-              }}
-            >
-              {recLoading ? "Loading..." : "Get Recommendations"}
+          <div className="pg-header-right">
+            <input
+              className="pg-input"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search product / SKU / category..."
+              style={{ width: 280 }}
+            />
+            <button type="button" className="pg-btn pg-btn-primary" onClick={openAdd}>
+              + Add Product
             </button>
           </div>
         </div>
 
-        {recError && (
-          <div style={{ marginTop: 12, padding: 14, background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 14, color: "#92400e", fontWeight: 700, fontSize: 13 }}>
-            {recError}
+        {/* KPI Cards */}
+        <div className="pg-kpi-grid">
+          <div className="pg-kpi">
+            <p className="pg-kpi-label">Total Products</p>
+            <p className="pg-kpi-value">{computed.totalSkus}</p>
+            <p className="pg-kpi-sub">SKUs tracked</p>
           </div>
-        )}
-
-        {recommendations && (
-          <div style={{ marginTop: 16, display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-            <KPI title="Stock Status" value={recommendations.stock_status || "N/A"} subtitle={getDisplayName(selectedFamily)} />
-            <KPI title="Order Recommendation" value={recommendations.order_recommendation || "N/A"} subtitle="Action needed" />
-            <KPI title="Order Quantity" value={`${recommendations.order_quantity ?? "N/A"}`} subtitle="Suggested units" />
-            <KPI title="Wastage Risk" value={recommendations.wastage_risk || "N/A"} subtitle="Perishability factor" />
-            <KPI title="Safety Stock" value={`${recommendations.safety_stock?.toFixed(0) ?? "N/A"}`} subtitle="Buffer units" />
-            <KPI title="Reorder Point" value={`${recommendations.reorder_point?.toFixed(0) ?? "N/A"}`} subtitle="Trigger level" />
-            <KPI title="Days of Stock" value={`${recommendations.days_of_stock?.toFixed(1) ?? "N/A"}`} subtitle="At current rate" />
-            <KPI title="Daily Forecast" value={`${recommendations.avg_daily_forecast?.toFixed(1) ?? "N/A"}`} subtitle="Avg units/day" />
+          <div className="pg-kpi">
+            <p className="pg-kpi-label">Low Stock Alerts</p>
+            <p className="pg-kpi-value" style={{ color: computed.lowCount > 0 ? "#dc2626" : "#0f172a" }}>
+              {computed.lowCount}
+            </p>
+            <p className="pg-kpi-sub">{settings.lowStockAlertsEnabled ? "Needs attention" : "Disabled by Admin"}</p>
           </div>
-        )}
+          <div className="pg-kpi">
+            <p className="pg-kpi-label">Inventory Value</p>
+            <p className="pg-kpi-value">₹ {computed.totalValue.toFixed(0)}</p>
+            <p className="pg-kpi-sub">Stock × unit price</p>
+          </div>
+          <div className="pg-kpi">
+            <p className="pg-kpi-label">Reorder Tip</p>
+            <p className="pg-kpi-value" style={{ fontSize: "0.9375rem" }}>Use suggestions</p>
+            <p className="pg-kpi-sub">Based on last 7 sales</p>
+          </div>
+        </div>
 
-        {alerts.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>Alerts</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {alerts.map((alert: any, idx: number) => (
-                <div key={idx} style={{
-                  padding: 12,
-                  borderRadius: 14,
-                  background: alert.type === "critical" ? "#fee2e2" : alert.type === "warning" ? "#fef3c7" : "#ecfdf5",
-                  border: `1px solid ${alert.type === "critical" ? "#fecaca" : alert.type === "warning" ? "#fde68a" : "#a7f3d0"}`,
-                  fontWeight: 700,
-                  fontSize: 13,
-                  color: alert.type === "critical" ? "#991b1b" : alert.type === "warning" ? "#92400e" : "#065f46",
-                }}>
-                  {alert.message || JSON.stringify(alert)}
+        {/* Split: Alerts + Table */}
+        <div className={`pg-split-row`}>
+          {/* Low Stock Panel */}
+          {settings.lowStockAlertsEnabled && (
+            <div className="pg-card" style={{ alignSelf: "start" }}>
+              <div className="pg-card-header">
+                <div>
+                  <p className="pg-card-title">Low Stock Alerts</p>
+                  <p className="pg-card-sub">Products below reorder point</p>
+                </div>
+                {lowStockRows.length > 0 && (
+                  <span className="pg-badge pg-badge-rose">{lowStockRows.length}</span>
+                )}
+              </div>
+              {lowStockRows.length === 0 ? (
+                <p className="pg-empty">No low-stock alerts 🎉</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                  {lowStockRows.slice(0, 6).map((r) => (
+                    <div key={r.id} className="pg-alert-card">
+                      <p className="pg-alert-name">{r.name}</p>
+                      <p className="pg-alert-info">Stock: {r.stock} · Reorder: {r.reorderPoint}</p>
+                      <p className="pg-alert-info">Suggested reorder: <b>{r.suggested}</b></p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Products Table */}
+          <div className="pg-card">
+            <div className="pg-card-header">
+              <div>
+                <p className="pg-card-title">Products</p>
+                <p className="pg-card-sub">Stock + reorder suggestion based on sales history</p>
+              </div>
+            </div>
+            <div className="pg-table-wrap">
+              <table className="pg-table" style={{ minWidth: 860 }}>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th>Category</th>
+                    <th>Stock</th>
+                    <th>Reorder Pt.</th>
+                    <th>Avg Daily (7d)</th>
+                    <th>Suggested</th>
+                    <th style={{ width: 160 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => (
+                    <tr key={r.id} className={settings.lowStockAlertsEnabled && r.lowStock ? "row-danger" : ""}>
+                      <td>
+                        <span className="cell-bold">{r.name}</span>
+                        <div style={{ marginTop: 2, fontSize: "0.6875rem", color: "#94a3b8" }}>₹ {r.unitPrice}</div>
+                      </td>
+                      <td className="cell-bold">{r.sku}</td>
+                      <td>{r.category}</td>
+                      <td>
+                        <span className={`pg-badge ${settings.lowStockAlertsEnabled && r.lowStock ? "pg-badge-rose" : "pg-badge-slate"}`}>
+                          {r.stock}
+                        </span>
+                      </td>
+                      <td><span className="pg-badge pg-badge-indigo">{r.reorderPoint}</span></td>
+                      <td>
+                        <span className="cell-bold">{r.avgDaily}</span>
+                        <div style={{ marginTop: 2, fontSize: "0.6875rem", color: "#94a3b8" }}>Sold: {r.totalUnitsLast7}</div>
+                      </td>
+                      <td>
+                        <span className={`pg-badge ${r.suggested > 0 ? "pg-badge-emerald" : "pg-badge-slate"}`}>
+                          {r.suggested}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button type="button" className="pg-btn pg-btn-sm" onClick={() => openEdit(r)}>Edit</button>
+                          <button type="button" className="pg-btn pg-btn-danger pg-btn-sm" onClick={() => removeItem(r.id)}>Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filtered.length === 0 && <p className="pg-empty">No products found.</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* AI Recommendations Section */}
+        <div className="pg-card">
+          <div className="pg-card-header">
+            <div>
+              <p className="pg-card-title">AI-Powered Recommendations</p>
+              <p className="pg-card-sub">Get inventory recommendations from the ML backend for perishable products.</p>
+            </div>
+            <div style={{ display: "flex", gap: "0.625rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div className="pg-field">
+                <label className="pg-label">Product Family</label>
+                <select
+                  className="pg-select"
+                  value={selectedFamily}
+                  onChange={(e) => setSelectedFamily(e.target.value)}
+                >
+                  {productFamilies.map((f) => (
+                    <option key={f} value={f}>{getEmoji(f)} {getDisplayName(f)}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="pg-btn pg-btn-success"
+                onClick={fetchRecommendations}
+                disabled={recLoading}
+              >
+                {recLoading ? "Loading..." : "Get Recommendations"}
+              </button>
+            </div>
+          </div>
+
+          {recError && (
+            <div className="pg-banner pg-banner-error" style={{ marginTop: "0.5rem" }}>{recError}</div>
+          )}
+
+          {/* Gemini Action Plan */}
+          {(actionPlanLoading || actionPlan || actionPlanError) && (
+            <div className="pg-ai-card pg-ai-card-green" style={{ marginTop: "1rem" }}>
+              <div className="pg-ai-card-head">
+                <span className="pg-ai-badge pg-ai-badge-green">AI ACTION PLAN</span>
+                <span className="pg-ai-title pg-ai-title-green">Gemini Inventory Advisor</span>
+              </div>
+              {actionPlanLoading && <p className="pg-ai-generating">Generating action plan...</p>}
+              {actionPlanError && <div className="pg-banner pg-banner-error" style={{ marginTop: "0.5rem" }}>{actionPlanError}</div>}
+              {actionPlan && <p className="pg-ai-text pg-ai-text-green">{actionPlan}</p>}
+            </div>
+          )}
+
+          {/* Recommendations KPIs */}
+          {recommendations && (
+            <div className="pg-kpi-grid" style={{ marginTop: "1rem" }}>
+              {[
+                { label: "Stock Status", value: recommendations.stock_status || "N/A", sub: getDisplayName(selectedFamily) },
+                { label: "Order Recommendation", value: recommendations.order_recommendation || "N/A", sub: "Action needed" },
+                { label: "Order Quantity", value: `${recommendations.order_quantity ?? "N/A"}`, sub: "Suggested units" },
+                { label: "Wastage Risk", value: recommendations.wastage_risk || "N/A", sub: "Perishability factor" },
+                { label: "Safety Stock", value: `${recommendations.safety_stock?.toFixed(0) ?? "N/A"}`, sub: "Buffer units" },
+                { label: "Reorder Point", value: `${recommendations.reorder_point?.toFixed(0) ?? "N/A"}`, sub: "Trigger level" },
+                { label: "Days of Stock", value: `${recommendations.days_of_stock?.toFixed(1) ?? "N/A"}`, sub: "At current rate" },
+                { label: "Daily Forecast", value: `${recommendations.avg_daily_forecast?.toFixed(1) ?? "N/A"}`, sub: "Avg units/day" },
+              ].map((kpi) => (
+                <div key={kpi.label} className="pg-kpi">
+                  <p className="pg-kpi-label">{kpi.label}</p>
+                  <p className="pg-kpi-value" style={{ fontSize: "0.9375rem" }}>{kpi.value}</p>
+                  <p className="pg-kpi-sub">{kpi.sub}</p>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Alerts */}
+          {alerts.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <p className="pg-section-heading" style={{ marginBottom: "0.625rem" }}>Alerts</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {alerts.map((alert: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className={`pg-banner ${
+                      alert.type === "critical" ? "pg-banner-error" :
+                      alert.type === "warning" ? "pg-banner-error" :
+                      "pg-banner-success"
+                    }`}
+                  >
+                    {alert.message || JSON.stringify(alert)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
+      {/* Modal */}
       {showModal && (
         <ProductModal
           initial={edit}
           defaultReorderPoint={settings.defaultReorderPoint}
-          onClose={() => {
-            setShowModal(false);
-            setEdit(null);
-          }}
+          onClose={() => { setShowModal(false); setEdit(null); }}
           onSave={onSave}
         />
       )}
     </div>
-  );
-}
-
-const btnBase: React.CSSProperties = {
-  borderRadius: 12,
-  border: "1px solid #e2e8f0",
-  background: "white",
-  padding: "10px 12px",
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-function KPI({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
-  return (
-    <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-      <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>{title}</div>
-      <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{value}</div>
-      <div style={{ marginTop: 6, color: "#64748b", fontWeight: 700, fontSize: 12 }}>{subtitle}</div>
-    </div>
-  );
-}
-
-function Card({
-  title,
-  subtitle,
-  children,
-  colSpan,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-  colSpan: number;
-}) {
-  return (
-    <div
-      style={{
-        gridColumn: `span ${colSpan}`,
-        background: "white",
-        borderRadius: 12,
-        padding: 16,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-      }}
-    >
-      <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{title}</div>
-      <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>{subtitle}</div>
-      <div style={{ marginTop: 12 }}>{children}</div>
-    </div>
-  );
-}
-
-function Pill({ text, tone }: { text: string; tone: "rose" | "indigo" | "emerald" | "slate" }) {
-  const map = {
-    rose: { bg: "#ffe4e6", border: "#fecdd3", color: "#9f1239" },
-    indigo: { bg: "#eef2ff", border: "#c7d2fe", color: "#3730a3" },
-    emerald: { bg: "#ecfdf5", border: "#a7f3d0", color: "#065f46" },
-    slate: { bg: "#f1f5f9", border: "#e2e8f0", color: "#0f172a" },
-  }[tone];
-
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        background: map.bg,
-        border: `1px solid ${map.border}`,
-        color: map.color,
-        padding: "6px 10px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 800,
-        minWidth: 42,
-        textAlign: "center",
-      }}
-    >
-      {text}
-    </span>
   );
 }
 
@@ -643,66 +484,39 @@ function ProductModal({
   const [category, setCategory] = useState(initial?.category ?? "General");
   const [unitPrice, setUnitPrice] = useState(String(initial?.unitPrice ?? 0));
   const [stock, setStock] = useState(String(initial?.stock ?? 0));
-
-  // ✅ default from Admin Settings when adding
-  const [reorderPoint, setReorderPoint] = useState(
-    String(initial?.reorderPoint ?? defaultReorderPoint ?? 10)
-  );
-
+  const [reorderPoint, setReorderPoint] = useState(String(initial?.reorderPoint ?? defaultReorderPoint ?? 10));
   const [err, setErr] = useState<string | null>(null);
 
   const submit = () => {
     setErr(null);
-
     if (!name.trim()) return setErr("Product name is required.");
     if (!sku.trim()) return setErr("SKU is required.");
-
-    const up = clampNum(Number(unitPrice));
-    const st = Math.max(0, clampNum(Number(stock)));
-    const rp = Math.max(0, clampNum(Number(reorderPoint)));
-
     onSave({
       name: name.trim(),
       sku: sku.trim(),
       category: category.trim(),
-      unitPrice: up,
-      stock: st,
-      reorderPoint: rp,
+      unitPrice: clampNum(Number(unitPrice)),
+      stock: Math.max(0, clampNum(Number(stock))),
+      reorderPoint: Math.max(0, clampNum(Number(reorderPoint))),
     });
   };
 
   return (
-    <div style={overlay}>
-      <div style={modal}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+    <div className="pg-overlay">
+      <div className="pg-modal">
+        <div className="pg-modal-header">
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>
-              {initial ? "Edit Product" : "Add Product"}
-            </div>
-            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>
-              Inventory data is local now; later it will save to DB.
-            </div>
+            <p className="pg-modal-title">{initial ? "Edit Product" : "Add Product"}</p>
+            <p className="pg-modal-sub">Inventory data is stored locally.</p>
           </div>
-          <button onClick={onClose} style={closeBtn}>✕</button>
+          <button className="pg-modal-close" onClick={onClose}>✕</button>
         </div>
 
         {err && (
-          <div
-            style={{
-              marginTop: 12,
-              background: "#fee2e2",
-              border: "1px solid #fecaca",
-              color: "#991b1b",
-              padding: "10px 12px",
-              borderRadius: 12,
-              fontWeight: 800,
-            }}
-          >
-            {err}
-          </div>
+          <div className="pg-banner pg-banner-error" style={{ marginBottom: "0.875rem" }}>{err}</div>
         )}
 
-        <div style={{ marginTop: 14, display: "grid", gap: 12, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+        <div className="pg-field-grid">
           <Field label="Product Name" value={name} onChange={setName} placeholder="e.g., Milk 500ml" />
           <Field label="SKU" value={sku} onChange={setSku} placeholder="e.g., SKU-1001" />
           <Field label="Category" value={category} onChange={setCategory} placeholder="e.g., Dairy" />
@@ -711,19 +525,9 @@ function ProductModal({
           <Field label="Reorder Point" value={reorderPoint} onChange={setReorderPoint} type="number" />
         </div>
 
-        <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={btnBase}>Cancel</button>
-          <button
-            onClick={submit}
-            style={{
-              ...btnBase,
-              border: "1px solid #c7d2fe",
-              background: "#4f46e5",
-              color: "white",
-            }}
-          >
-            Save
-          </button>
+        <div style={{ marginTop: "1.125rem", display: "flex", gap: "0.625rem", justifyContent: "flex-end" }}>
+          <button type="button" className="pg-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="pg-btn pg-btn-primary" onClick={submit}>Save</button>
         </div>
       </div>
     </div>
@@ -744,50 +548,15 @@ function Field({
   type?: string;
 }) {
   return (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#334155" }}>{label}</div>
+    <div className="pg-field">
+      <label className="pg-label">{label}</label>
       <input
+        className="pg-input pg-input-full"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         type={type}
-        style={{
-          marginTop: 8,
-          width: "100%",
-          borderRadius: 12,
-          border: "1px solid #e2e8f0",
-          padding: "10px 12px",
-        }}
       />
     </div>
   );
 }
-
-const overlay: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.55)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-  padding: 16,
-};
-
-const modal: React.CSSProperties = {
-  width: "min(760px, 100%)",
-  background: "white",
-  borderRadius: 14,
-  padding: 16,
-  boxShadow: "0 20px 80px rgba(0,0,0,0.25)",
-};
-
-const closeBtn: React.CSSProperties = {
-  borderRadius: 12,
-  border: "1px solid #e2e8f0",
-  background: "white",
-  width: 40,
-  height: 40,
-  cursor: "pointer",
-  fontWeight: 800,
-};

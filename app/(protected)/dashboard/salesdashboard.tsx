@@ -8,101 +8,82 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
+  ReferenceLine,
+  Cell,
+  LabelList,
 } from "recharts";
+import {
+  DollarSign,
+  TrendingUp,
+  Star,
+  Package,
+  BarChart2,
+  Clock,
+  ChevronDown,
+  RefreshCw,
+  Database,
+  Layers,
+  Calendar,
+  History,
+  ArrowRight,
+} from "lucide-react";
+import Link from "next/link";
 import "./salesdashboard.css";
 import { apiClient } from "@/lib/api-client";
 import { getDisplayName } from "@/lib/product-mapping";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
 import ErrorBanner from "@/app/components/ErrorBanner";
 
-/** ---------- Small UI helpers ---------- */
-const Badge = ({ children }: { children: React.ReactNode }) => (
-  <span className="inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-black/5">
-    {children}
-  </span>
-);
-
-type StatProps = {
+/* ─── KPI Card (horizontal compact) ──────────────── */
+type KpiCardProps = {
   title: string;
   value: string | number;
-  change: string;
-  changePositive?: boolean;
+  sub: string;
   icon: React.ReactNode;
-  accent: string;
+  iconClass: string;
+  trend?: { up: boolean; label: string } | null;
+  delay?: number;
 };
 
-const StatCard = ({
+const KpiCard = ({
   title,
   value,
-  change,
-  changePositive = true,
+  sub,
   icon,
-  accent,
-}: StatProps) => (
-  <div className="relative overflow-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-    <div
-      className={`absolute -right-10 -top-10 h-36 w-36 rounded-full bg-gradient-to-br ${accent} opacity-10`}
-    />
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {title}
-        </p>
-        <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
-        <div className="mt-2 flex items-center gap-2 text-sm">
-          <span className={changePositive ? "text-emerald-600" : "text-rose-600"}>
-            {changePositive ? "↑" : "↓"} {change}
-          </span>
-          <span className="text-slate-400">vs prior period</span>
-        </div>
-      </div>
-      <div
-        className={`grid h-10 w-10 place-content-center rounded-xl bg-gradient-to-br ${accent} text-white shadow`}
-      >
-        {icon}
-      </div>
+  iconClass,
+  trend,
+  delay = 0,
+}: KpiCardProps) => (
+  <div className="kpi-card" style={{ animationDelay: `${delay}s` }}>
+    <div className={`kpi-icon ${iconClass}`}>{icon}</div>
+    <div className="kpi-body">
+      <p className="kpi-value">{value}</p>
+      <p className="kpi-title">{title}</p>
+      <p className="kpi-sub">{sub}</p>
     </div>
+    {trend && (
+      <span className={`kpi-trend ${trend.up ? "up" : "down"}`}>
+        {trend.up ? "↑" : "↓"} {trend.label}
+      </span>
+    )}
   </div>
 );
 
-const AlertCard = ({
-  title,
-  desc,
-  tone = "amber",
-}: {
-  title: string;
-  desc: string;
-  tone?: "rose" | "amber" | "sky";
-}) => {
-  const toneMap: Record<string, string> = {
-    rose: "bg-rose-50 ring-rose-100",
-    amber: "bg-amber-50 ring-amber-100",
-    sky: "bg-sky-50 ring-sky-100",
-  };
-  const dotMap: Record<string, string> = {
-    rose: "bg-rose-500",
-    amber: "bg-amber-500",
-    sky: "bg-sky-500",
-  };
-  return (
-    <div className={`rounded-xl ${toneMap[tone]} p-4 ring-1 transition-all duration-200 hover:shadow-md`}>
-      <div className="flex items-start gap-3">
-        <span className={`mt-1 h-2.5 w-2.5 rounded-full ${dotMap[tone]}`} />
-        <div>
-          <p className="font-medium text-slate-800">{title}</p>
-          <p className="mt-1 text-sm text-slate-600">{desc}</p>
-        </div>
-      </div>
-    </div>
-  );
-};
+/* ─── Number formatter helpers ───────────────────── */
+const fmtK = (v: number) =>
+  v >= 1_000_000
+    ? `${(v / 1_000_000).toFixed(1)}M`
+    : v >= 1_000
+    ? `${(v / 1_000).toFixed(0)}K`
+    : `${v}`;
 
+/* ─── Main Dashboard ─────────────────────────────── */
 export default function SalesDashboard() {
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentSales, setRecentSales] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; units: number }[]>([]);
@@ -110,12 +91,11 @@ export default function SalesDashboard() {
   const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
   const [dataSummary, setDataSummary] = useState<any>(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
 
-      // Fetch products and summary in parallel
       const [productsResp, summaryResp] = await Promise.all([
         apiClient.getProducts(),
         apiClient.getDataSummary(),
@@ -125,37 +105,30 @@ export default function SalesDashboard() {
       setProductFamilies(families);
       if (summaryResp.success) setDataSummary(summaryResp.data);
 
-      // Fetch sales data for selected product family
-      const salesResp = await apiClient.getSalesData({
-        product_family: selectedFamily,
-      });
-
+      const salesResp = await apiClient.getSalesData({ product_family: selectedFamily });
       if (salesResp.success && salesResp.data) {
-        // Take the last 7 data points for the trend chart
         const sorted = salesResp.data.sort(
           (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
-        const last7 = sorted.slice(-7);
         setRecentSales(
-          last7.map((r: any) => {
-            const d = new Date(r.date);
-            const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
-            return { day: dayName, date: r.date, sales: Math.round(r.sales || 0) };
-          })
+          sorted.slice(-7).map((r: any) => ({
+            day: new Date(r.date).toLocaleDateString("en-US", { weekday: "short" }),
+            date: r.date,
+            sales: Math.round(r.sales || 0),
+          }))
         );
       }
 
-      // Fetch sales for all families to build top 5
       const familySalesPromises = families.map(async (family: string) => {
         try {
           const resp = await apiClient.getSalesData({ product_family: family });
           if (resp.success && resp.data) {
-            // Sum the last 30 records of sales for this family
             const sorted = resp.data.sort(
               (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
             );
-            const recent = sorted.slice(-30);
-            const totalUnits = recent.reduce((sum: number, r: any) => sum + (r.sales || 0), 0);
+            const totalUnits = sorted
+              .slice(-30)
+              .reduce((sum: number, r: any) => sum + (r.sales || 0), 0);
             return { name: getDisplayName(family), units: Math.round(totalUnits) };
           }
           return { name: getDisplayName(family), units: 0 };
@@ -165,14 +138,18 @@ export default function SalesDashboard() {
       });
 
       const familySales = await Promise.all(familySalesPromises);
-      const top5 = familySales.sort((a, b) => b.units - a.units).slice(0, 5);
-      setTopProducts(top5);
+      setTopProducts(familySales.sort((a, b) => b.units - a.units).slice(0, 5));
     } catch (err: any) {
-      console.error("Dashboard fetch error:", err);
       setError(err.message || "Failed to load dashboard data. Is the backend running?");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchDashboardData(true);
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
@@ -185,22 +162,20 @@ export default function SalesDashboard() {
         latestSales: 0,
         totalSales: 0,
         avgDaily: 0,
+        changePct: 0,
         bestProductName: topProducts[0]?.name || "N/A",
         bestProductUnits: topProducts[0]?.units || 0,
         productCount: productFamilies.length,
       };
     }
-
     const latestSales = recentSales[recentSales.length - 1]?.sales || 0;
     const totalSales = recentSales.reduce((s, d) => s + d.sales, 0);
     const avgDaily = Math.round(totalSales / recentSales.length);
-
-    // Compare first half vs second half for trend
     const mid = Math.floor(recentSales.length / 2);
     const firstHalf = recentSales.slice(0, mid).reduce((s, d) => s + d.sales, 0);
     const secondHalf = recentSales.slice(mid).reduce((s, d) => s + d.sales, 0);
-    const changePct = firstHalf > 0 ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100) : 0;
-
+    const changePct =
+      firstHalf > 0 ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100) : 0;
     return {
       latestSales,
       totalSales,
@@ -212,195 +187,368 @@ export default function SalesDashboard() {
     };
   }, [recentSales, topProducts, productFamilies]);
 
-  if (loading) return <LoadingSpinner message="Loading dashboard data from backend..." />;
+  const BAR_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"];
+
+  if (loading) return <LoadingSpinner message="Loading dashboard data…" />;
   if (error) return <ErrorBanner message={error} onRetry={fetchDashboardData} />;
 
-  return (
-    <div className="w-full">
+  const selectedName = getDisplayName(selectedFamily);
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
-              Vendor Dashboard
-            </h1>
-            <p className="text-sm text-slate-600">
-              Live data from backend API — sales, product performance & forecasts.
+  return (
+    <div className="dash-page">
+      <div className="dash-container">
+
+        {/* ── Page Header ──────────────────────────────── */}
+        <header className="dash-header">
+          <div className="dash-header-left">
+            <div className="dash-live-pill">
+              <span className="dash-live-dot" />
+              LIVE
+            </div>
+            <h1 className="dash-title">Vendor Dashboard</h1>
+            <p className="dash-subtitle">
+              Sales data &middot; product performance &middot; forecasts
             </p>
           </div>
 
-          {/* Product Family Selector */}
-          <select
-            value={selectedFamily}
-            onChange={(e) => setSelectedFamily(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              fontWeight: 700,
-              fontSize: 14,
-              color: "#0f172a",
-              background: "white",
-            }}
-          >
-            {productFamilies.map((f) => (
-              <option key={f} value={f}>
-                {getDisplayName(f)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-8">
-          {/* KPI Cards */}
-          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard
-              title="Latest Day Sales"
-              value={`${summary.latestSales.toLocaleString()} units`}
-              change={`${getDisplayName(selectedFamily)}`}
-              changePositive
-              accent="from-cyan-500 to-blue-600"
-              icon={<span role="img" aria-label="money">💰</span>}
-            />
-            <StatCard
-              title="7-Day Total"
-              value={`${summary.totalSales.toLocaleString()} units`}
-              change={`${(summary as any).changePct ?? 0}%`}
-              changePositive={((summary as any).changePct ?? 0) >= 0}
-              accent="from-emerald-500 to-lime-600"
-              icon={<span role="img" aria-label="trend">📈</span>}
-            />
-            <StatCard
-              title="Best-Selling Category"
-              value={summary.bestProductName}
-              change={`${summary.bestProductUnits.toLocaleString()} units (30d)`}
-              changePositive
-              accent="from-purple-500 to-fuchsia-600"
-              icon={<span role="img" aria-label="star">⭐</span>}
-            />
-            <StatCard
-              title="Product Categories"
-              value={`${summary.productCount}`}
-              change="Perishable items tracked"
-              changePositive
-              accent="from-amber-500 to-orange-600"
-              icon={<span role="img" aria-label="products">📦</span>}
-            />
-            <StatCard
-              title="Avg Daily Demand"
-              value={`${summary.avgDaily} units`}
-              change={`${getDisplayName(selectedFamily)}`}
-              changePositive
-              accent="from-sky-500 to-indigo-600"
-              icon={<span role="img" aria-label="forecast">🔮</span>}
-            />
-          </section>
-
-          {/* Mini Trend + Info */}
-          <section className="grid gap-6 xl:grid-cols-3">
-            {/* Mini trend chart (line) */}
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 xl:col-span-2 transition-all duration-300 hover:shadow-lg">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Sales Trend — {getDisplayName(selectedFamily)} (Last 7 data points)
-                </h2>
-                <div className="flex items-center gap-2 text-xs">
-                  <Badge>Units Sold</Badge>
-                </div>
-              </div>
-
-              <div className="w-full rounded-xl bg-gradient-to-b from-indigo-50 to-white p-4" style={{ height: "300px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={recentSales}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="day" stroke="#64748b" />
-                    <YAxis stroke="#64748b" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.75rem",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      }}
-                    />
-                    <Line type="monotone" dataKey="sales" strokeWidth={2} dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+          <div className="dash-header-right">
+            <div className="dash-time">
+              <Clock size={12} />
+              Updated just now
             </div>
 
-            {/* Data Info */}
-            <div className="space-y-4">
-              <h2 className="px-1 text-lg font-semibold text-slate-900">Dataset Info</h2>
+            <div className="dash-select-wrap">
+              <select
+                value={selectedFamily}
+                onChange={(e) => setSelectedFamily(e.target.value)}
+                className="dash-select"
+              >
+                {productFamilies.map((f) => (
+                  <option key={f} value={f}>
+                    {getDisplayName(f)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={13} className="dash-select-icon" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="dash-refresh"
+            >
+              <RefreshCw size={13} className={isRefreshing ? "spin" : ""} />
+              {isRefreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+        </header>
+
+        {/* ── KPI Grid ─────────────────────────────────── */}
+        <div className="kpi-grid">
+          <KpiCard
+            title="Latest Day Sales"
+            value={summary.latestSales.toLocaleString()}
+            sub={`units · ${selectedName}`}
+            icon={<DollarSign size={18} />}
+            iconClass="icon-cyan"
+            delay={0}
+          />
+          <KpiCard
+            title="7-Day Total"
+            value={summary.totalSales.toLocaleString()}
+            sub="units this week"
+            icon={<TrendingUp size={18} />}
+            iconClass="icon-emerald"
+            trend={{
+              up: summary.changePct >= 0,
+              label: `${Math.abs(summary.changePct)}%`,
+            }}
+            delay={0.06}
+          />
+          <KpiCard
+            title="Best-Selling Category"
+            value={summary.bestProductName}
+            sub={`${summary.bestProductUnits.toLocaleString()} units (30d)`}
+            icon={<Star size={18} />}
+            iconClass="icon-purple"
+            delay={0.12}
+          />
+          <KpiCard
+            title="Product Categories"
+            value={summary.productCount}
+            sub="perishable families"
+            icon={<Package size={18} />}
+            iconClass="icon-amber"
+            delay={0.18}
+          />
+          <KpiCard
+            title="Avg Daily Demand"
+            value={summary.avgDaily.toLocaleString()}
+            sub={`units/day · ${selectedName}`}
+            icon={<BarChart2 size={18} />}
+            iconClass="icon-sky"
+            delay={0.24}
+          />
+        </div>
+
+        {/* ── Charts Row ───────────────────────────────── */}
+        <div className="charts-row">
+
+          {/* Area Chart */}
+          <div className="chart-panel">
+            <div className="panel-header">
+              <div>
+                <p className="panel-title">Sales Trend &mdash; {selectedName}</p>
+                <p className="panel-sub">Last 7 data points &middot; daily units sold</p>
+              </div>
+              <span className="units-badge">Units Sold</span>
+            </div>
+            <div className="chart-area">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={recentSales}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#f1f5f9"
+                  />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 11, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={52}
+                    tickFormatter={(v) =>
+                      v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}`
+                    }
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "white",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                    }}
+                    cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }}
+                  />
+                  <ReferenceLine
+                    y={summary.avgDaily}
+                    stroke="#c7d2fe"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: "Avg",
+                      position: "right",
+                      fontSize: 10,
+                      fill: "#94a3b8",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    fill="url(#salesGrad)"
+                    dot={{ r: 3.5, fill: "white", stroke: "#6366f1", strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: "#6366f1", stroke: "white", strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Dataset Info Panel */}
+          <div className="dataset-panel">
+            <div className="ds-header">
+              <Database size={15} />
+              Dataset Info
+            </div>
+            <div className="ds-body">
               {dataSummary ? (
-                <div className="space-y-3">
-                  <AlertCard
-                    title="Total Records"
-                    desc={`${dataSummary.total_records?.toLocaleString() || "N/A"} sales records in dataset`}
-                    tone="sky"
-                  />
-                  <AlertCard
-                    title="Product Families"
-                    desc={`${dataSummary.num_families || productFamilies.length} perishable categories tracked`}
-                    tone="amber"
-                  />
-                  <AlertCard
-                    title="Date Range"
-                    desc={`${dataSummary.date_range?.start || "N/A"} to ${dataSummary.date_range?.end || "N/A"}`}
-                    tone="sky"
-                  />
-                </div>
+                <>
+                  <div className="ds-row">
+                    <div className="ds-icon ds-icon-sky">
+                      <Database size={14} />
+                    </div>
+                    <div className="ds-text">
+                      <p className="ds-label">Total Records</p>
+                      <p className="ds-value">
+                        {dataSummary.total_records?.toLocaleString() || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="ds-row">
+                    <div className="ds-icon ds-icon-amber">
+                      <Layers size={14} />
+                    </div>
+                    <div className="ds-text">
+                      <p className="ds-label">Product Families</p>
+                      <p className="ds-value">
+                        {dataSummary.num_families || productFamilies.length}{" "}
+                        <span className="ds-value-note">categories</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="ds-row">
+                    <div className="ds-icon ds-icon-indigo">
+                      <Calendar size={14} />
+                    </div>
+                    <div className="ds-text">
+                      <p className="ds-label">Date Range</p>
+                      <p className="ds-value" style={{ fontSize: "0.8125rem" }}>
+                        {dataSummary.date_range?.start || "N/A"}
+                        <br />
+                        <span className="ds-value-note">to</span>{" "}
+                        {dataSummary.date_range?.end || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </>
               ) : (
-                <AlertCard
-                  title="Tip"
-                  desc="Train a model in the Forecast page to unlock predictions and inventory alerts."
-                  tone="amber"
-                />
+                <div className="ds-row">
+                  <div className="ds-icon ds-icon-amber">
+                    <TrendingUp size={14} />
+                  </div>
+                  <div className="ds-text">
+                    <p className="ds-label">Tip</p>
+                    <p className="ds-value" style={{ fontSize: "0.8rem", fontWeight: 400 }}>
+                      Train a model in Forecast to unlock predictions.
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
-          </section>
-
-          {/* Top 5 products */}
-          <section>
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 transition-all duration-300 hover:shadow-lg">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Top Product Categories</h2>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Most sold categories by units (last 30 data points per category)
-                  </p>
-                </div>
-              </div>
-
-              <div className="w-full rounded-xl bg-gradient-to-b from-slate-50 to-white p-4" style={{ height: "350px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProducts}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="name" stroke="#64748b" />
-                    <YAxis stroke="#64748b" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.75rem",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      }}
-                    />
-                    <Legend />
-                    <Bar dataKey="units" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </section>
+          </div>
         </div>
-      </div>
 
-      <footer className="mx-auto max-w-7xl px-4 py-8 text-center">
-        <p className="text-xs text-slate-500">
-          Vendor Dashboard — Live data from Flask backend API
-        </p>
-      </footer>
+        {/* ── Bar Chart ────────────────────────────────── */}
+        <div className="chart-panel">
+          <div className="panel-header">
+            <div>
+              <p className="panel-title">Top Product Categories</p>
+              <p className="panel-sub">
+                Most sold by units &middot; last 30 data points per category
+              </p>
+            </div>
+          </div>
+          <div className="chart-area-tall">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={topProducts}
+                margin={{ top: 28, right: 16, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#f1f5f9"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={52}
+                  tickFormatter={fmtK}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                  }}
+                  cursor={{ fill: "rgba(99,102,241,0.04)" }}
+                />
+                <Bar dataKey="units" radius={[6, 6, 0, 0]}>
+                  {topProducts.map((_, i) => (
+                    <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                  ))}
+                  <LabelList
+                    dataKey="units"
+                    position="top"
+                    style={{ fontSize: 10, fontWeight: 700, fill: "#475569" }}
+                    formatter={(v: any) => fmtK(Number(v))}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── Quick Navigation ─────────────────────────── */}
+        <div>
+          <p className="qnav-heading">Quick Navigation</p>
+          <div className="qnav-grid">
+            <Link href="/dashboard/forecast" className="qnav-card qnav-purple">
+              <div className="qnav-icon">
+                <TrendingUp size={18} />
+              </div>
+              <div className="qnav-text">
+                <span className="qnav-label">Forecast</span>
+                <span className="qnav-sub">Train ML models</span>
+              </div>
+              <ArrowRight size={15} className="qnav-arrow" />
+            </Link>
+
+            <Link href="/dashboard/history" className="qnav-card qnav-blue">
+              <div className="qnav-icon">
+                <History size={18} />
+              </div>
+              <div className="qnav-text">
+                <span className="qnav-label">Sales History</span>
+                <span className="qnav-sub">View past records</span>
+              </div>
+              <ArrowRight size={15} className="qnav-arrow" />
+            </Link>
+
+            <Link href="/inventory" className="qnav-card qnav-orange">
+              <div className="qnav-icon">
+                <Package size={18} />
+              </div>
+              <div className="qnav-text">
+                <span className="qnav-label">Inventory</span>
+                <span className="qnav-sub">Stock &amp; reorder</span>
+              </div>
+              <ArrowRight size={15} className="qnav-arrow" />
+            </Link>
+
+            <Link href="/dashboard/analytics" className="qnav-card qnav-green">
+              <div className="qnav-icon">
+                <BarChart2 size={18} />
+              </div>
+              <div className="qnav-text">
+                <span className="qnav-label">Analytics</span>
+                <span className="qnav-sub">Anomaly detection</span>
+              </div>
+              <ArrowRight size={15} className="qnav-arrow" />
+            </Link>
+          </div>
+        </div>
+
+        <footer className="dash-footer">
+          SalesForecast &mdash; Live data via Flask backend &mdash; &copy; 2026
+        </footer>
+      </div>
     </div>
   );
 }

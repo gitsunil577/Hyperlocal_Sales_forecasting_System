@@ -14,7 +14,7 @@ type HistoryItem = {
 
 type HistoryEntry = {
   id: number;
-  saleDate: string; // YYYY-MM-DD
+  saleDate: string;
   note?: string;
   items: HistoryItem[];
   totalUnits: number;
@@ -30,7 +30,6 @@ function parseISO(d: string) {
 }
 
 function formatDate(d: string) {
-  // show as DD MMM YYYY (simple)
   const dt = parseISO(d);
   return dt.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
@@ -42,9 +41,7 @@ function toISO(date: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function todayISO() {
-  return toISO(new Date());
-}
+function todayISO() { return toISO(new Date()); }
 
 function daysAgoISO(n: number) {
   const d = new Date();
@@ -54,53 +51,38 @@ function daysAgoISO(n: number) {
 
 function downloadCSV(filename: string, rows: string[][]) {
   const csv = rows
-    .map((r) =>
-      r
-        .map((cell) => {
-          const v = String(cell ?? "");
-          const escaped = v.replace(/"/g, '""');
-          return `"${escaped}"`;
-        })
-        .join(",")
-    )
+    .map((r) => r.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
     .join("\n");
-
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-
   URL.revokeObjectURL(url);
 }
 
 export default function SalesHistoryPage() {
   const [preset, setPreset] = useState<Preset>("7d");
-  const [from, setFrom] = useState<string>(daysAgoISO(6)); // last 7 days includes today
+  const [from, setFrom] = useState<string>(daysAgoISO(6));
   const [to, setTo] = useState<string>(todayISO());
   const [q, setQ] = useState<string>("");
 
   const [data, setData] = useState<HistoryEntry[]>([]);
-
-  // Backend data state
   const [tab, setTab] = useState<"local" | "backend">("local");
   const [productFamilies, setProductFamilies] = useState<string[]>([]);
   const [selectedFamily, setSelectedFamily] = useState("BREAD/BAKERY");
   const [backendData, setBackendData] = useState<any[]>([]);
   const [backendLoading, setBackendLoading] = useState(false);
 
-  // Load product families
   useEffect(() => {
     apiClient.getProducts()
       .then((resp) => { if (resp.products) setProductFamilies(resp.products); })
       .catch(() => {});
   }, []);
 
-  // Fetch backend sales data when tab or family changes
   useEffect(() => {
     if (tab !== "backend") return;
     setBackendLoading(true);
@@ -110,58 +92,41 @@ export default function SalesHistoryPage() {
           const sorted = resp.data.sort(
             (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
           );
-          setBackendData(sorted.slice(0, 100)); // show last 100 records
+          setBackendData(sorted.slice(0, 100));
         }
       })
       .catch(() => setBackendData([]))
       .finally(() => setBackendLoading(false));
   }, [tab, selectedFamily]);
 
-  // Load saved history
   useEffect(() => {
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       setData(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setData([]);
-    }
+    } catch { setData([]); }
   }, []);
 
-  // When preset changes, update date range
   useEffect(() => {
-    if (preset === "7d") {
-      setFrom(daysAgoISO(6));
-      setTo(todayISO());
-    }
-    if (preset === "1w") {
-      setFrom(daysAgoISO(7));
-      setTo(todayISO());
-    }
-    if (preset === "1m") {
-      setFrom(daysAgoISO(30));
-      setTo(todayISO());
-    }
+    if (preset === "7d") { setFrom(daysAgoISO(6)); setTo(todayISO()); }
+    if (preset === "1w") { setFrom(daysAgoISO(7)); setTo(todayISO()); }
+    if (preset === "1m") { setFrom(daysAgoISO(30)); setTo(todayISO()); }
   }, [preset]);
 
   const filtered = useMemo(() => {
     const fromD = parseISO(from);
     const toD = parseISO(to);
-
     const query = q.trim().toLowerCase();
 
     return data.filter((e) => {
       const d = parseISO(e.saleDate);
-      const inRange = d >= fromD && d <= toD;
-
-      if (!inRange) return false;
+      if (d < fromD || d > toD) return false;
       if (!query) return true;
-
-      const matchNote = (e.note || "").toLowerCase().includes(query);
-      const matchDate = e.saleDate.includes(query);
-      const matchProducts = e.items.some((it) => it.productName.toLowerCase().includes(query));
-
-      return matchNote || matchDate || matchProducts;
+      return (
+        (e.note || "").toLowerCase().includes(query) ||
+        e.saleDate.includes(query) ||
+        e.items.some((it) => it.productName.toLowerCase().includes(query))
+      );
     });
   }, [data, from, to, q]);
 
@@ -176,7 +141,6 @@ export default function SalesHistoryPage() {
     const rows: string[][] = [
       ["Sale Date", "Note", "Product", "Quantity", "Unit Price", "Line Total", "Day Total Amount"],
     ];
-
     filtered.forEach((entry) => {
       entry.items.forEach((it, idx) => {
         rows.push([
@@ -186,11 +150,10 @@ export default function SalesHistoryPage() {
           String(it.quantity),
           String(it.unitPrice),
           String(it.total),
-          idx === 0 ? String(entry.totalAmount) : "", // show day total once
+          idx === 0 ? String(entry.totalAmount) : "",
         ]);
       });
     });
-
     downloadCSV(`sales_history_${from}_to_${to}.csv`, rows);
   };
 
@@ -201,127 +164,83 @@ export default function SalesHistoryPage() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a" }}>Sales History</h1>
-          <p style={{ marginTop: 6, fontSize: 14, color: "#94a3b8", fontWeight: 500 }}>
-            View sales records by date range (7 days, 1 week, 1 month, custom) and export as CSV.
-          </p>
+    <div className="pg-page">
+      <div className="pg-container">
+
+        {/* Header */}
+        <div className="pg-header">
+          <div className="pg-header-left">
+            <h1 className="pg-title">Sales History</h1>
+            <p className="pg-subtitle">View records by date range and export as CSV.</p>
+          </div>
+          <div className="pg-header-right">
+            <button type="button" className="pg-btn pg-btn-primary" onClick={exportCSV}>
+              Export CSV
+            </button>
+            <button type="button" className="pg-btn pg-btn-danger" onClick={clearAll}>
+              Clear Local Data
+            </button>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={exportCSV}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #4f46e5",
-              background: "#4f46e5",
-              color: "white",
-              padding: "10px 12px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Export CSV
+        {/* Tabs */}
+        <div className="pg-tabs">
+          <button type="button" className={`pg-tab ${tab === "local" ? "active" : ""}`} onClick={() => setTab("local")}>
+            Local History
           </button>
-
-          <button
-            type="button"
-            onClick={clearAll}
-            style={{
-              borderRadius: 12,
-              border: "1px solid #fecaca",
-              background: "#fee2e2",
-              color: "#991b1b",
-              padding: "10px 12px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Clear Local Data
+          <button type="button" className={`pg-tab ${tab === "backend" ? "active" : ""}`} onClick={() => setTab("backend")}>
+            Backend Dataset
           </button>
         </div>
-      </div>
 
-      {/* Tab Switcher */}
-      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button
-          onClick={() => setTab("local")}
-          type="button"
-          style={{
-            padding: "10px 20px",
-            borderRadius: 999,
-            border: tab === "local" ? "1px solid #4f46e5" : "1px solid #e2e8f0",
-            background: tab === "local" ? "#4f46e5" : "white",
-            color: tab === "local" ? "white" : "#0f172a",
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
-        >
-          Local History
-        </button>
-        <button
-          onClick={() => setTab("backend")}
-          type="button"
-          style={{
-            padding: "10px 20px",
-            borderRadius: 999,
-            border: tab === "backend" ? "1px solid #4f46e5" : "1px solid #e2e8f0",
-            background: tab === "backend" ? "#4f46e5" : "white",
-            color: tab === "backend" ? "white" : "#0f172a",
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
-        >
-          Backend Dataset
-        </button>
-      </div>
-
-      {tab === "backend" ? (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 16 }}>
+        {tab === "backend" ? (
+          <div className="pg-card">
+            <div className="pg-card-header">
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>Product Family</label>
+                <p className="pg-card-title">Backend Dataset</p>
+                <p className="pg-card-sub">Last 100 records from the backend API</p>
+              </div>
+            </div>
+            <div className="pg-filter-bar" style={{ marginBottom: "1rem" }}>
+              <div className="pg-field">
+                <label className="pg-label">Product Family</label>
                 <select
+                  className="pg-select"
                   value={selectedFamily}
                   onChange={(e) => setSelectedFamily(e.target.value)}
-                  style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px", fontWeight: 700 }}
                 >
                   {productFamilies.map((f) => (
                     <option key={f} value={f}>{getDisplayName(f)}</option>
                   ))}
                 </select>
               </div>
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
+              <span className="pg-badge pg-badge-slate" style={{ alignSelf: "flex-end", marginBottom: "2px" }}>
                 Showing last 100 records
-              </div>
+              </span>
             </div>
 
             {backendLoading ? (
-              <div style={{ padding: 24, textAlign: "center", color: "#64748b", fontWeight: 700 }}>Loading backend data...</div>
+              <p className="pg-loading">Loading backend data...</p>
             ) : backendData.length === 0 ? (
-              <div style={{ color: "#64748b", fontWeight: 700 }}>No data found. Make sure the backend is running.</div>
+              <p className="pg-empty">No data found. Make sure the backend is running.</p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 8px", minWidth: 600 }}>
+              <div className="pg-table-wrap">
+                <table className="pg-table" style={{ minWidth: 600 }}>
                   <thead>
-                    <tr style={{ textAlign: "left", color: "#64748b", fontSize: 13 }}>
-                      <th style={{ padding: "0 10px" }}>Date</th>
-                      <th style={{ padding: "0 10px" }}>Product Family</th>
-                      <th style={{ padding: "0 10px" }}>Sales (units)</th>
-                      <th style={{ padding: "0 10px" }}>On Promotion</th>
+                    <tr>
+                      <th>Date</th>
+                      <th>Product Family</th>
+                      <th>Sales (units)</th>
+                      <th>On Promotion</th>
                     </tr>
                   </thead>
                   <tbody>
                     {backendData.map((r: any, idx: number) => (
-                      <tr key={idx} style={{ background: "#f8fafc" }}>
-                        <td style={{ padding: 10, borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>{r.date}</td>
-                        <td style={{ padding: 10, fontWeight: 700, color: "#334155" }}>{getDisplayName(selectedFamily)}</td>
-                        <td style={{ padding: 10, fontWeight: 800, color: "#0f172a" }}>{Math.round(r.sales || 0)}</td>
-                        <td style={{ padding: 10, fontWeight: 700, color: "#64748b" }}>{r.onpromotion ?? "N/A"}</td>
+                      <tr key={idx}>
+                        <td className="cell-bold">{r.date}</td>
+                        <td>{getDisplayName(selectedFamily)}</td>
+                        <td className="cell-bold">{Math.round(r.sales || 0)}</td>
+                        <td className="cell-muted">{r.onpromotion ?? "N/A"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -329,152 +248,117 @@ export default function SalesHistoryPage() {
               </div>
             )}
           </div>
-        </div>
-      ) : (
-      <>
-      {/* Filters */}
-      <div style={{ marginTop: 16, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>Range</label>
-            <select
-              value={preset}
-              onChange={(e) => setPreset(e.target.value as Preset)}
-              style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px", background: "white" }}
-            >
-              <option value="7d">Last 7 Days</option>
-              <option value="1w">Last 1 Week</option>
-              <option value="1m">Last 1 Month</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>From</label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => {
-                setPreset("custom");
-                setFrom(e.target.value);
-              }}
-              style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px" }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>To</label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => {
-                setPreset("custom");
-                setTo(e.target.value);
-              }}
-              style={{ marginTop: 8, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 12px" }}
-            />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#334155" }}>Search</label>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by product, note, or date..."
-              style={{
-                marginTop: 8,
-                width: "100%",
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                padding: "10px 12px",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Totals row */}
-        <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
-            Days: {totals.daysCount}
-          </div>
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
-            Total Units: {totals.totalUnits}
-          </div>
-          <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", padding: "10px 12px", borderRadius: 12, fontWeight: 800, color: "#3730a3" }}>
-            Total Amount: ₹ {totals.totalAmount.toFixed(2)}
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div style={{ marginTop: 16, background: "white", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Records</h2>
-
-        {filtered.length === 0 ? (
-          <div style={{ marginTop: 12, color: "#64748b", fontWeight: 600 }}>
-            No records found for this range. Add sales from <b>Add Daily Sales</b>.
-          </div>
         ) : (
-          <div style={{ marginTop: 12, overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 10px", minWidth: 900 }}>
-              <thead>
-                <tr style={{ textAlign: "left", color: "#64748b", fontSize: 13 }}>
-                  <th style={{ padding: "0 10px" }}>Date</th>
-                  <th style={{ padding: "0 10px" }}>Note</th>
-                  <th style={{ padding: "0 10px" }}>Products</th>
-                  <th style={{ padding: "0 10px", width: 140 }}>Units</th>
-                  <th style={{ padding: "0 10px", width: 160 }}>Amount (₹)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((entry) => (
-                  <tr key={entry.id} style={{ background: "#f8fafc" }}>
-                    <td style={{ padding: 12, borderRadius: 12, fontWeight: 800, color: "#0f172a" }}>
-                      {formatDate(entry.saleDate)}
-                      <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>{entry.saleDate}</div>
-                    </td>
+          <>
+            {/* Filters + Totals */}
+            <div className="pg-card">
+              <div className="pg-filter-bar">
+                <div className="pg-field">
+                  <label className="pg-label">Range</label>
+                  <select
+                    className="pg-select"
+                    value={preset}
+                    onChange={(e) => setPreset(e.target.value as Preset)}
+                  >
+                    <option value="7d">Last 7 Days</option>
+                    <option value="1w">Last 1 Week</option>
+                    <option value="1m">Last 1 Month</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div className="pg-field">
+                  <label className="pg-label">From</label>
+                  <input
+                    type="date"
+                    className="pg-input"
+                    value={from}
+                    onChange={(e) => { setPreset("custom"); setFrom(e.target.value); }}
+                  />
+                </div>
+                <div className="pg-field">
+                  <label className="pg-label">To</label>
+                  <input
+                    type="date"
+                    className="pg-input"
+                    value={to}
+                    onChange={(e) => { setPreset("custom"); setTo(e.target.value); }}
+                  />
+                </div>
+                <div className="pg-field" style={{ flex: 1, minWidth: 220 }}>
+                  <label className="pg-label">Search</label>
+                  <input
+                    className="pg-input pg-input-full"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Search by product, note, or date..."
+                  />
+                </div>
+              </div>
 
-                    <td style={{ padding: 12, color: "#334155", fontWeight: 700 }}>
-                      {entry.note || <span style={{ color: "#94a3b8" }}>—</span>}
-                    </td>
+              <div className="pg-pill-strip" style={{ marginTop: "1rem" }}>
+                <span className="pg-pill">Days: {totals.daysCount}</span>
+                <span className="pg-pill">Total Units: {totals.totalUnits}</span>
+                <span className="pg-pill pg-pill-indigo">Total: ₹ {totals.totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
 
-                    <td style={{ padding: 12 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {entry.items.slice(0, 4).map((it, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              background: "white",
-                              border: "1px solid #e2e8f0",
-                              padding: "6px 10px",
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              color: "#0f172a",
-                            }}
-                          >
-                            {it.productName} × {it.quantity}
-                          </span>
-                        ))}
-                        {entry.items.length > 4 && (
-                          <span style={{ fontSize: 12, fontWeight: 800, color: "#6366f1" }}>
-                            +{entry.items.length - 4} more
-                          </span>
-                        )}
-                      </div>
-                    </td>
+            {/* Records Table */}
+            <div className="pg-card">
+              <div className="pg-card-header">
+                <div>
+                  <p className="pg-card-title">Records</p>
+                  <p className="pg-card-sub">{filtered.length} entr{filtered.length !== 1 ? "ies" : "y"} found</p>
+                </div>
+              </div>
 
-                    <td style={{ padding: 12, fontWeight: 800, color: "#0f172a" }}>{entry.totalUnits}</td>
-                    <td style={{ padding: 12, fontWeight: 800, color: "#0f172a" }}>₹ {entry.totalAmount.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              {filtered.length === 0 ? (
+                <p className="pg-empty">
+                  No records found for this range. Add sales from <b>Add Daily Sales</b>.
+                </p>
+              ) : (
+                <div className="pg-table-wrap">
+                  <table className="pg-table" style={{ minWidth: 860 }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Note</th>
+                        <th>Products</th>
+                        <th style={{ width: 120 }}>Units</th>
+                        <th style={{ width: 150 }}>Amount (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((entry) => (
+                        <tr key={entry.id}>
+                          <td>
+                            <span className="cell-bold">{formatDate(entry.saleDate)}</span>
+                            <div style={{ marginTop: 2, fontSize: "0.6875rem", color: "#94a3b8" }}>{entry.saleDate}</div>
+                          </td>
+                          <td>{entry.note || <span className="cell-muted">—</span>}</td>
+                          <td>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
+                              {entry.items.slice(0, 4).map((it, idx) => (
+                                <span key={idx} className="pg-chip">{it.productName} × {it.quantity}</span>
+                              ))}
+                              {entry.items.length > 4 && (
+                                <span style={{ fontSize: "0.6875rem", fontWeight: 800, color: "#6366f1" }}>
+                                  +{entry.items.length - 4} more
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="cell-bold">{entry.totalUnits}</td>
+                          <td className="cell-bold">₹ {entry.totalAmount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
-      </>
-      )}
     </div>
   );
 }

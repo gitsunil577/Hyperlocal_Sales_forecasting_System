@@ -121,13 +121,18 @@
 }
 
 .nav-item.active::before {
-  height: 24px;
+  height: 28px;
+  width: 4px;
+  background: white;
+  border-radius: 0 4px 4px 0;
 }
 
 .nav-icon {
-  font-size: 1.4em;
-  min-width: 28px;
-  text-align: center;
+  font-size: 1em;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar.closed .nav-item span:not(.nav-icon) {

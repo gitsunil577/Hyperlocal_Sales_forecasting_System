@@ -6,8 +6,13 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { apiClient } from "@/lib/api-client";
+import {
+  LayoutDashboard, ClipboardList, History, TrendingUp,
+  Upload, Package, BarChart3, Settings, Users, Globe,
+  Settings2, User, LogOut
+} from "lucide-react";
 
-type NavItem = { href: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: React.ReactNode };
 
 export default function ProtectedShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -43,21 +48,21 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
   }, []);
 
   const vendorNav: NavItem[] = [
-    { href: "/dashboard", label: "Dashboard", icon: "📈" },
-    { href: "/dashboard/sales", label: "Daily Sales Entry", icon: "🧾" },
-    { href: "/dashboard/history", label: "Sales History", icon: "🗓️" },
-    { href: "/dashboard/forecast", label: "Forecast", icon: "📅" },
-    { href: "/dashboard/upload-analyze", label: "Upload & Analyze", icon: "📤" },
-    { href: "/inventory", label: "Inventory", icon: "📦" },
-    { href: "/dashboard/analytics", label: "Analytics", icon: "📊" },
+    { href: "/dashboard",                label: "Dashboard",         icon: <LayoutDashboard size={18}/> },
+    { href: "/dashboard/sales",          label: "Daily Sales Entry", icon: <ClipboardList size={18}/> },
+    { href: "/dashboard/history",        label: "Sales History",     icon: <History size={18}/> },
+    { href: "/dashboard/forecast",       label: "Forecast",          icon: <TrendingUp size={18}/> },
+    { href: "/dashboard/upload-analyze", label: "Upload & Analyze",  icon: <Upload size={18}/> },
+    { href: "/inventory",                label: "Inventory",         icon: <Package size={18}/> },
+    { href: "/dashboard/analytics",      label: "Analytics",         icon: <BarChart3 size={18}/> },
   ];
 
   const adminNav: NavItem[] = [
-    { href: "/admin", label: "Admin Dashboard", icon: "🛠️" },
-    { href: "/admin/vendors", label: "Vendors", icon: "👥" },
-    { href: "/admin/analytics", label: "Global Analytics", icon: "🌍" },
-    { href: "/dashboard/upload-analyze", label: "Upload & Analyze", icon: "📤" },
-    { href: "/admin/settings", label: "Settings", icon: "⚙️" },
+    { href: "/admin",                    label: "Admin Dashboard",   icon: <Settings2 size={18}/> },
+    { href: "/admin/vendors",            label: "Vendors",           icon: <Users size={18}/> },
+    { href: "/admin/analytics",          label: "Global Analytics",  icon: <Globe size={18}/> },
+    { href: "/dashboard/upload-analyze", label: "Upload & Analyze",  icon: <Upload size={18}/> },
+    { href: "/admin/settings",           label: "Settings",          icon: <Settings size={18}/> },
   ];
 
   const navItems = useMemo(() => (role === "admin" ? adminNav : vendorNav), [role]);
@@ -122,7 +127,7 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
 
         <div className="sidebar-footer">
           <div className="nav-item" style={{ cursor: "default", opacity: 0.95 }}>
-            <span className="nav-icon">👤</span>
+            <span className="nav-icon"><User size={18}/></span>
             {sidebarOpen && (
               <span>
                 {mounted ? (role === "admin" ? "Admin" : "Vendor") : "User"} •{" "}
@@ -132,7 +137,7 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
           </div>
 
           <button onClick={handleLogout} className="nav-item logout-btn" type="button">
-            <span className="nav-icon">🚪</span>
+            <span className="nav-icon"><LogOut size={18}/></span>
             {sidebarOpen && <span>Logout</span>}
           </button>
         </div>

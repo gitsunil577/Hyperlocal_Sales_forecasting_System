@@ -185,6 +185,44 @@ class ApiClient {
       body: JSON.stringify(params),
     });
   }
+
+  // Gemini AI Insights
+
+  async getForecastInsight(params: {
+    product_family: string;
+    model_type: string;
+    metrics: Record<string, number | null>;
+    predictions: Array<Record<string, unknown>>;
+  }) {
+    return this.request('/api/insights/forecast-summary', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getInventoryInsight(params: {
+    product_family: string;
+    recommendations: Record<string, unknown>;
+  }) {
+    return this.request('/api/insights/inventory-alert', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getAnomalyInsight(params: {
+    product_family: string;
+    date: string;
+    actual: number;
+    expected: number;
+    holidays?: Array<Record<string, unknown>>;
+    weather?: Record<string, unknown>;
+  }) {
+    return this.request('/api/insights/anomaly-explain', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();
