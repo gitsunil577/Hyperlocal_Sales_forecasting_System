@@ -420,7 +420,7 @@ export default function InventoryPage() {
                 { label: "Safety Stock", value: `${recommendations.safety_stock?.toFixed(0) ?? "N/A"}`, sub: "Buffer units" },
                 { label: "Reorder Point", value: `${recommendations.reorder_point?.toFixed(0) ?? "N/A"}`, sub: "Trigger level" },
                 { label: "Days of Stock", value: `${recommendations.days_of_stock?.toFixed(1) ?? "N/A"}`, sub: "At current rate" },
-                { label: "Daily Forecast", value: `${recommendations.avg_daily_forecast?.toFixed(1) ?? "N/A"}`, sub: "Avg units/day" },
+                { label: "Daily Forecast", value: `${(recommendations.avg_daily_forecast ?? recommendations.forecast_avg_daily)?.toFixed(1) ?? "N/A"}`, sub: "Avg units/day" },
               ].map((kpi) => (
                 <div key={kpi.label} className="pg-kpi">
                   <p className="pg-kpi-label">{kpi.label}</p>

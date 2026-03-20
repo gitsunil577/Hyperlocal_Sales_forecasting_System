@@ -1,0 +1,519 @@
+
+> my-app@0.1.0 dev
+> next dev --turbopack
+
+   ▲ Next.js 15.5.12 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.29.145:3000
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · serverActions
+
+ ✓ Starting...
+ ○ Compiling middleware ...
+ ✓ Compiled middleware in 598ms
+ ✓ Ready in 2.7s
+ ○ Compiling / ...
+ ✓ Compiled / in 3.1s
+ GET / 200 in 3613ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 1833ms
+ GET /dashboard 200 in 2210ms
+ ○ Compiling /api/[...path] ...
+ ✓ Compiled /api/[...path] in 835ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/products 200 in 1940ms
+ GET /api/health 200 in 1933ms
+ GET /api/data/summary 500 in 1939ms
+ GET /api/auth/session 200 in 2499ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 305ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 430ms
+ GET /api/auth/session 200 in 416ms
+[mongodb] Resolved to direct URI via DoH
+ GET /dashboard 200 in 309ms
+ GET /api/products 200 in 486ms
+ GET /api/health 200 in 483ms
+ GET /api/data/summary 200 in 489ms
+ GET /api/auth/session 200 in 496ms
+ GET /api/auth/session 200 in 370ms
+ POST /api/data/sales 200 in 396ms
+ POST /api/data/sales 200 in 764ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 805ms
+ POST /api/data/sales 200 in 809ms
+ POST /api/data/sales 200 in 832ms
+ POST /api/data/sales 200 in 846ms
+ POST /api/data/sales 200 in 850ms
+ POST /api/data/sales 200 in 543ms
+ POST /api/data/sales 200 in 489ms
+ POST /api/data/sales 200 in 500ms
+ GET /api/auth/session 200 in 333ms
+ GET /api/auth/session 200 in 329ms
+[mongodb] Resolved to direct URI via DoH
+ ✓ Compiled in 136ms
+ ✓ Compiled /_not-found/page in 300ms
+ GET /api/health 200 in 324ms
+ GET /api/products 404 in 657ms
+ GET /api/data/summary 404 in 650ms
+ ✓ Compiled in 96ms
+ GET /api/products 200 in 339ms
+ GET /api/data/summary 200 in 349ms
+ GET /api/products 200 in 416ms
+ GET /api/data/summary 200 in 419ms
+ POST /api/data/sales 200 in 426ms
+ POST /api/data/sales 200 in 610ms
+ POST /api/data/sales 200 in 595ms
+ POST /api/data/sales 200 in 641ms
+ POST /api/data/sales 200 in 664ms
+ POST /api/data/sales 200 in 676ms
+ POST /api/data/sales 200 in 695ms
+ POST /api/data/sales 200 in 695ms
+ POST /api/data/sales 200 in 696ms
+ POST /api/data/sales 200 in 634ms
+ POST /api/data/sales 200 in 673ms
+ POST /api/data/sales 200 in 662ms
+ POST /api/data/sales 200 in 652ms
+ POST /api/data/sales 200 in 618ms
+ POST /api/data/sales 200 in 626ms
+ POST /api/data/sales 200 in 662ms
+ POST /api/data/sales 200 in 660ms
+ POST /api/data/sales 200 in 639ms
+ POST /api/data/sales 200 in 648ms
+ POST /api/data/sales 200 in 349ms
+ ✓ Compiled in 117ms
+ GET /dashboard 200 in 704ms
+ GET /api/products 200 in 484ms
+ GET /api/health 200 in 483ms
+ GET /api/data/summary 200 in 489ms
+ GET /api/auth/session 200 in 506ms
+ GET /api/products 200 in 538ms
+ GET /api/health 200 in 560ms
+ GET /api/auth/session 200 in 549ms
+ GET /api/data/summary 200 in 573ms
+ POST /api/data/sales 200 in 583ms
+ GET /api/auth/session 200 in 548ms
+ POST /api/data/sales 200 in 653ms
+ POST /api/data/sales 200 in 671ms
+ POST /api/data/sales 200 in 681ms
+ POST /api/data/sales 200 in 706ms
+ POST /api/data/sales 200 in 751ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 415ms
+ POST /api/data/sales 200 in 745ms
+ GET /api/auth/session 200 in 678ms
+ POST /api/data/sales 200 in 750ms
+ POST /api/data/sales 200 in 749ms
+ POST /api/data/sales 200 in 756ms
+ POST /api/data/sales 200 in 543ms
+ POST /api/data/sales 200 in 735ms
+ POST /api/data/sales 200 in 721ms
+ POST /api/data/sales 200 in 777ms
+ POST /api/data/sales 200 in 841ms
+ POST /api/data/sales 200 in 727ms
+ POST /api/data/sales 200 in 788ms
+ POST /api/data/sales 200 in 453ms
+ POST /api/data/sales 200 in 407ms
+[mongodb] Resolved to direct URI via DoH
+ GET /dashboard 200 in 230ms
+ GET /api/products 200 in 631ms
+ GET /api/health 200 in 617ms
+ GET /api/data/summary 200 in 631ms
+ GET /api/auth/session 200 in 645ms
+ GET /api/products 200 in 558ms
+ GET /api/health 200 in 584ms
+ GET /api/auth/session 200 in 564ms
+ GET /api/data/summary 200 in 595ms
+ POST /api/data/sales 200 in 604ms
+ GET /api/auth/session 200 in 548ms
+ POST /api/data/sales 200 in 591ms
+ POST /api/data/sales 200 in 640ms
+ POST /api/data/sales 200 in 661ms
+ POST /api/data/sales 200 in 713ms
+ POST /api/data/sales 200 in 719ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 647ms
+ POST /api/data/sales 200 in 673ms
+ POST /api/data/sales 200 in 653ms
+ GET /api/auth/session 200 in 607ms
+ POST /api/data/sales 200 in 684ms
+ POST /api/data/sales 200 in 646ms
+ POST /api/data/sales 200 in 446ms
+ POST /api/data/sales 200 in 681ms
+ POST /api/data/sales 200 in 750ms
+ POST /api/data/sales 200 in 804ms
+ POST /api/data/sales 200 in 775ms
+ POST /api/data/sales 200 in 545ms
+ POST /api/data/sales 200 in 771ms
+ POST /api/data/sales 200 in 504ms
+ POST /api/data/sales 200 in 526ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 382ms
+ GET /api/auth/session 200 in 423ms
+[mongodb] Resolved to direct URI via DoH
+ ○ Compiling /dashboard/forecast ...
+ ✓ Compiled /dashboard/forecast in 746ms
+ GET /dashboard/forecast 200 in 834ms
+ GET /api/products 200 in 340ms
+ GET /api/products 200 in 311ms
+ POST /api/forecast/train 500 in 681ms
+ GET /dashboard/forecast 200 in 369ms
+ GET /api/products 200 in 464ms
+ GET /api/health 200 in 466ms
+ GET /api/auth/session 200 in 480ms
+ GET /api/products 200 in 499ms
+ GET /api/health 200 in 499ms
+ GET /api/auth/session 200 in 483ms
+ GET /api/auth/session 200 in 290ms
+ GET /api/auth/session 200 in 309ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/forecast/train 200 in 998ms
+ POST /api/forecast/predict 200 in 495ms
+ POST /api/insights/forecast-summary 400 in 313ms
+ ✓ Compiled /dashboard/history in 365ms
+ GET /dashboard/history 200 in 580ms
+ GET /api/products 200 in 473ms
+ GET /api/health 200 in 477ms
+ GET /api/auth/session 200 in 479ms
+ GET /api/products 200 in 467ms
+ GET /api/health 200 in 462ms
+ GET /api/auth/session 200 in 465ms
+ GET /api/auth/session 200 in 293ms
+ GET /api/auth/session 200 in 312ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 341ms
+ ○ Compiling /dashboard/analytics ...
+ ✓ Compiled /dashboard/analytics in 634ms
+ GET /dashboard/analytics 200 in 876ms
+ GET /api/products 200 in 453ms
+ GET /api/health 200 in 456ms
+ GET /api/auth/session 200 in 467ms
+ GET /api/products 200 in 479ms
+ GET /api/health 200 in 508ms
+ GET /api/auth/session 200 in 501ms
+ POST /api/data/sales 200 in 526ms
+ GET /api/auth/session 200 in 353ms
+ POST /api/data/sales 200 in 401ms
+ GET /api/auth/session 200 in 361ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 378ms
+ GET /api/auth/session 200 in 497ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 469ms
+ GET /api/auth/session 200 in 437ms
+[mongodb] Resolved to direct URI via DoH
+ ✓ Compiled /dashboard/sales in 325ms
+ GET /dashboard/sales 200 in 563ms
+ GET /api/products 200 in 461ms
+ GET /api/health 200 in 449ms
+ GET /api/auth/session 200 in 471ms
+ GET /api/products 200 in 426ms
+ GET /api/health 200 in 429ms
+ GET /api/auth/session 200 in 476ms
+ GET /api/auth/session 200 in 344ms
+ GET /api/auth/session 200 in 325ms
+[mongodb] Resolved to direct URI via DoH
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 338ms
+ GET /api/auth/session 200 in 440ms
+[mongodb] Resolved to direct URI via DoH
+ ✓ Compiled /inventory in 329ms
+ GET /inventory 200 in 550ms
+ GET /api/products 200 in 456ms
+ GET /api/health 200 in 458ms
+ GET /api/auth/session 200 in 460ms
+ GET /api/auth/session 200 in 429ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 454ms
+ GET /api/auth/session 200 in 648ms
+[mongodb] Resolved to direct URI via DoH
+ GET /inventory 200 in 216ms
+ GET /api/products 200 in 650ms
+ GET /api/health 200 in 645ms
+ GET /api/auth/session 200 in 655ms
+ GET /api/auth/session 200 in 354ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 342ms
+ GET /api/auth/session 200 in 334ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 357ms
+ GET /api/auth/session 200 in 387ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 394ms
+ GET /api/auth/session 200 in 463ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 360ms
+ GET /api/auth/session 200 in 346ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/inventory/recommendations 200 in 637ms
+ POST /api/insights/inventory-alert 400 in 345ms
+ ✓ Compiled in 96ms
+ ○ Compiling /predictions ...
+ ✓ Compiled /predictions in 884ms
+ GET /predictions 200 in 1217ms
+ GET /api/products 200 in 544ms
+ GET /api/health 200 in 546ms
+ GET /api/auth/session 200 in 552ms
+ GET /api/auth/session 200 in 386ms
+[mongodb] Resolved to direct URI via DoH
+ ○ Compiling /reports ...
+ ✓ Compiled /reports in 619ms
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /reports 200 in 944ms
+ GET /api/health 200 in 493ms
+ GET /api/auth/session 200 in 497ms
+ GET /api/health 200 in 463ms
+ GET /api/auth/session 200 in 486ms
+ GET /api/auth/session 200 in 341ms
+ GET /api/auth/session 200 in 373ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 433ms
+ GET /api/auth/session 200 in 957ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 392ms
+ GET /api/auth/session 200 in 481ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 480ms
+ GET /api/auth/session 200 in 428ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 344ms
+ GET /api/auth/session 200 in 504ms
+[mongodb] Resolved to direct URI via DoH
+ GET /dashboard 200 in 292ms
+ GET /api/products 200 in 637ms
+ GET /api/health 200 in 625ms
+ GET /api/auth/session 200 in 634ms
+ GET /api/data/summary 200 in 638ms
+ GET /api/auth/session 200 in 352ms
+ POST /api/data/sales 200 in 407ms
+ POST /api/data/sales 200 in 768ms
+ POST /api/data/sales 200 in 781ms
+ POST /api/data/sales 200 in 815ms
+ POST /api/data/sales 200 in 830ms
+ POST /api/data/sales 200 in 834ms
+ POST /api/data/sales 200 in 844ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 484ms
+ POST /api/data/sales 200 in 482ms
+ POST /api/data/sales 200 in 526ms
+ ✓ Compiled /logout in 259ms
+ GET /logout 200 in 399ms
+ GET /api/auth/csrf 200 in 388ms
+ GET /api/auth/session 200 in 393ms
+ POST /api/auth/signout 200 in 367ms
+ GET /api/auth/session 200 in 359ms
+ ✓ Compiled /login in 341ms
+ GET /login 200 in 570ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 373ms
+ GET /api/auth/session 200 in 310ms
+[mongodb] Resolved to direct URI via DoH
+ GET /dashboard 200 in 242ms
+ GET /api/products 200 in 511ms
+ GET /api/health 200 in 498ms
+ GET /api/data/summary 200 in 506ms
+ GET /api/auth/session 200 in 507ms
+ GET /api/auth/session 200 in 367ms
+ POST /api/data/sales 200 in 420ms
+ POST /api/data/sales 200 in 774ms
+ POST /api/data/sales 200 in 777ms
+ POST /api/data/sales 200 in 823ms
+ POST /api/data/sales 200 in 823ms
+ POST /api/data/sales 200 in 851ms
+ POST /api/data/sales 200 in 858ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 611ms
+ POST /api/data/sales 200 in 637ms
+ POST /api/data/sales 200 in 578ms
+ GET /api/auth/signout 200 in 301ms
+[mongodb] Resolved to direct URI via DoH
+ GET /dashboard 200 in 226ms
+ GET /api/products 200 in 555ms
+ GET /api/health 200 in 552ms
+ GET /api/auth/session 200 in 559ms
+ GET /api/data/summary 200 in 586ms
+ GET /api/auth/session 200 in 403ms
+ POST /api/data/sales 200 in 421ms
+ POST /api/data/sales 200 in 1321ms
+ POST /api/data/sales 200 in 1549ms
+ POST /api/data/sales 200 in 1573ms
+ POST /api/data/sales 200 in 1591ms
+ POST /api/data/sales 200 in 1612ms
+ POST /api/data/sales 200 in 1622ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 998ms
+ POST /api/data/sales 200 in 702ms
+ POST /api/data/sales 200 in 709ms
+ ✓ Compiled /api/register in 128ms
+ POST /api/register 400 in 423ms
+ POST /api/register 201 in 761ms
+[31m[auth][error][0m MissingCSRF: CSRF token was missing during an action signout. Read more at https://errors.authjs.dev#missingcsrf
+    at validateCSRF (E:\Coding\minorProject\frontend2\.next\server\chunks\97170_@auth_core_24f87d1e._.js:1228:11)
+    at AuthInternal (E:\Coding\minorProject\frontend2\.next\server\chunks\97170_@auth_core_24f87d1e._.js:5156:254)
+    at async Auth (E:\Coding\minorProject\frontend2\.next\server\chunks\97170_@auth_core_24f87d1e._.js:5370:34)
+    at async AppRouteRouteModule.do (E:\Coding\minorProject\frontend2\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:38696)
+    at async AppRouteRouteModule.handle (E:\Coding\minorProject\frontend2\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45978)
+    at async responseGenerator (E:\Coding\minorProject\frontend2\.next\server\chunks\node_modules_next_6a8e2c9b._.js:16887:38)
+    at async AppRouteRouteModule.handleResponse (E:\Coding\minorProject\frontend2\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:195257)
+    at async handleResponse (E:\Coding\minorProject\frontend2\.next\server\chunks\node_modules_next_6a8e2c9b._.js:16949:32)
+    at async handler (E:\Coding\minorProject\frontend2\.next\server\chunks\node_modules_next_6a8e2c9b._.js:17001:13)
+    at async DevServer.renderToResponseWithComponentsImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1422:9)
+    at async DevServer.renderPageComponent (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1474:24)
+    at async DevServer.renderToResponseImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1514:32)
+    at async DevServer.pipeImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1025:25)
+    at async NextNodeServer.handleCatchallRenderRequest (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\next-server.js:393:17)
+    at async DevServer.handleRequestImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:916:17)
+    at async E:\Coding\minorProject\frontend2\node_modules\next\dist\server\dev\next-dev-server.js:400:20
+    at async Span.traceAsyncFn (E:\Coding\minorProject\frontend2\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\dev\next-dev-server.js:396:24)
+    at async invokeRender (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\router-server.js:240:21)
+    at async handleRequest (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\router-server.js:437:24)
+    at async requestHandlerImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\router-server.js:485:13)
+    at async Server.requestListener (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\start-server.js:226:13)
+ POST /api/auth/signout 302 in 334ms
+ GET /dashboard 200 in 243ms
+ GET /dashboard 200 in 324ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/products 200 in 596ms
+ GET /api/health 200 in 595ms
+ GET /api/data/summary 200 in 607ms
+ GET /api/auth/session 200 in 582ms
+ GET /api/auth/session 200 in 386ms
+ POST /api/data/sales 200 in 421ms
+ POST /api/data/sales 200 in 610ms
+ POST /api/data/sales 200 in 629ms
+ POST /api/data/sales 200 in 679ms
+ POST /api/data/sales 200 in 699ms
+ POST /api/data/sales 200 in 751ms
+ POST /api/data/sales 200 in 755ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/data/sales 200 in 645ms
+ POST /api/data/sales 200 in 681ms
+ POST /api/data/sales 200 in 542ms
+ GET /api/auth/csrf 200 in 307ms
+ POST /api/auth/signout 302 in 459ms
+ GET /login 200 in 283ms
+ GET /login 200 in 220ms
+ GET /api/auth/session 200 in 366ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 324ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/providers 200 in 302ms
+ GET /api/auth/csrf 200 in 327ms
+ POST /api/auth/callback/credentials? 200 in 691ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 325ms
+ GET /api/auth/session 200 in 314ms
+ GET /api/auth/session 200 in 324ms
+ ✓ Compiled /admin in 339ms
+ GET /admin 200 in 465ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/health 200 in 521ms
+ GET /api/products 200 in 511ms
+ GET /api/models/status 200 in 511ms
+ GET /api/data/summary 200 in 520ms
+ GET /api/health 200 in 450ms
+ GET /api/products 200 in 474ms
+ GET /api/models/status 200 in 477ms
+ GET /api/data/summary 200 in 471ms
+ GET /api/health 200 in 319ms
+ GET /api/health 200 in 290ms
+ ✓ Compiled /admin/vendors in 413ms
+ GET /admin/vendors 200 in 650ms
+ GET /api/health 200 in 490ms
+ GET /api/auth/session 200 in 497ms
+ GET /api/auth/session 200 in 393ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 414ms
+ GET /api/auth/session 200 in 734ms
+[mongodb] Resolved to direct URI via DoH
+ ○ Compiling /admin/analytics ...
+ ✓ Compiled /admin/analytics in 636ms
+ GET /admin/analytics 200 in 723ms
+ ✓ Compiled /admin/settings in 305ms
+ GET /admin/settings 200 in 393ms
+ ○ Compiling /dashboard/upload-analyze ...
+ ✓ Compiled /dashboard/upload-analyze in 518ms
+ GET /dashboard/upload-analyze 200 in 601ms
+ POST /api/upload/parse 400 in 455ms
+ POST /api/upload/parse 200 in 305ms
+ GET /login?next=%2Fdashboard%2Fupload-analyze 200 in 190ms
+ GET /api/auth/session 200 in 309ms
+ GET /api/auth/session 200 in 301ms
+[mongodb] Resolved to direct URI via DoH
+ GET /login 200 in 156ms
+ GET /api/auth/session 200 in 300ms
+ GET /api/auth/session 200 in 312ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/providers 200 in 300ms
+ GET /api/auth/csrf 200 in 319ms
+[31m[auth][error][0m CredentialsSignin: Read more at https://errors.authjs.dev#credentialssignin
+    at Module.callback (E:\Coding\minorProject\frontend2\.next\server\chunks\97170_@auth_core_24f87d1e._.js:4314:30)
+    at async AuthInternal (E:\Coding\minorProject\frontend2\.next\server\chunks\97170_@auth_core_24f87d1e._.js:5148:24)
+    at async Auth (E:\Coding\minorProject\frontend2\.next\server\chunks\97170_@auth_core_24f87d1e._.js:5370:34)
+    at async AppRouteRouteModule.do (E:\Coding\minorProject\frontend2\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:38696)
+    at async AppRouteRouteModule.handle (E:\Coding\minorProject\frontend2\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45978)
+    at async responseGenerator (E:\Coding\minorProject\frontend2\.next\server\chunks\node_modules_next_6a8e2c9b._.js:16887:38)
+    at async AppRouteRouteModule.handleResponse (E:\Coding\minorProject\frontend2\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:195257)
+    at async handleResponse (E:\Coding\minorProject\frontend2\.next\server\chunks\node_modules_next_6a8e2c9b._.js:16949:32)
+    at async handler (E:\Coding\minorProject\frontend2\.next\server\chunks\node_modules_next_6a8e2c9b._.js:17001:13)
+    at async DevServer.renderToResponseWithComponentsImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1422:9)
+    at async DevServer.renderPageComponent (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1474:24)
+    at async DevServer.renderToResponseImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1514:32)
+    at async DevServer.pipeImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:1025:25)
+    at async NextNodeServer.handleCatchallRenderRequest (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\next-server.js:393:17)
+    at async DevServer.handleRequestImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\base-server.js:916:17)
+    at async E:\Coding\minorProject\frontend2\node_modules\next\dist\server\dev\next-dev-server.js:400:20
+    at async Span.traceAsyncFn (E:\Coding\minorProject\frontend2\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\dev\next-dev-server.js:396:24)
+    at async invokeRender (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\router-server.js:240:21)
+    at async handleRequest (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\router-server.js:437:24)
+    at async requestHandlerImpl (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\router-server.js:485:13)
+    at async Server.requestListener (E:\Coding\minorProject\frontend2\node_modules\next\dist\server\lib\start-server.js:226:13)
+ POST /api/auth/callback/credentials? 200 in 336ms
+ GET /api/auth/session 200 in 337ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/register 201 in 700ms
+ GET /api/auth/providers 200 in 294ms
+ GET /api/auth/csrf 200 in 337ms
+ POST /api/auth/callback/credentials? 200 in 654ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 302ms
+ GET /api/auth/session 200 in 353ms
+ GET /admin 200 in 124ms
+ GET /api/auth/session 200 in 324ms
+ GET /api/health 200 in 452ms
+ GET /api/products 200 in 451ms
+ GET /api/models/status 200 in 456ms
+ GET /api/data/summary 200 in 462ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/health 200 in 451ms
+ GET /api/products 200 in 455ms
+ GET /api/models/status 200 in 457ms
+ GET /api/data/summary 200 in 460ms
+ GET /api/health 200 in 303ms
+ GET /api/health 200 in 319ms
+ GET /dashboard/upload-analyze 200 in 235ms
+ GET /api/health 200 in 360ms
+ GET /api/auth/session 200 in 364ms
+ GET /api/auth/session 200 in 314ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/upload/parse 200 in 297ms
+ GET /api/auth/session 200 in 331ms
+ GET /api/auth/session 200 in 358ms
+[mongodb] Resolved to direct URI via DoH
+ POST /api/upload/train 200 in 28080ms
+ POST /api/upload/predict 200 in 346ms
+ GET /api/auth/session 200 in 368ms
+ GET /api/auth/session 200 in 474ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 363ms
+ GET /api/auth/session 200 in 353ms
+ GET /api/auth/session 200 in 320ms
+[mongodb] Resolved to direct URI via DoH
+ GET /api/auth/session 200 in 320ms
+[mongodb] Resolved to direct URI via DoH

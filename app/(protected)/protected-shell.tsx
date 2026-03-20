@@ -9,7 +9,7 @@ import { apiClient } from "@/lib/api-client";
 import {
   LayoutDashboard, ClipboardList, History, TrendingUp,
   Upload, Package, BarChart3, Settings, Users, Globe,
-  Settings2, User, LogOut
+  Settings2, User, LogOut, Brain, FileText
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -20,7 +20,9 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
 
   const { data: session, status } = useSession();
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth > 968 : true
+  );
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
@@ -55,6 +57,8 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
     { href: "/dashboard/upload-analyze", label: "Upload & Analyze",  icon: <Upload size={18}/> },
     { href: "/inventory",                label: "Inventory",         icon: <Package size={18}/> },
     { href: "/dashboard/analytics",      label: "Analytics",         icon: <BarChart3 size={18}/> },
+    { href: "/predictions",              label: "Predictions",       icon: <Brain size={18}/> },
+    { href: "/reports",                  label: "Reports",           icon: <FileText size={18}/> },
   ];
 
   const adminNav: NavItem[] = [
@@ -94,6 +98,14 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
 
   return (
     <div className="dashboard-wrapper">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">

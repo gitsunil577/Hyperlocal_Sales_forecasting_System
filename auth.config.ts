@@ -14,7 +14,9 @@ export const authConfig: NextAuthConfig = {
       const isLoggedIn = !!auth?.user;
       const pathname = nextUrl.pathname;
 
-      const isVendorArea = pathname.startsWith("/dashboard");
+      const isVendorArea = pathname.startsWith("/dashboard")
+        || pathname === "/inventory" || pathname.startsWith("/inventory/")
+        || pathname === "/predictions" || pathname === "/reports";
       const isAdminArea = pathname.startsWith("/admin");
       const isAuthPage =
         pathname.startsWith("/login") || pathname.startsWith("/register");

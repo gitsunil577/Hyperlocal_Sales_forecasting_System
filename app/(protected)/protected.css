@@ -356,6 +356,10 @@
 /* ============================================
    RESPONSIVE DESIGN
    ============================================ */
+.sidebar-backdrop {
+  display: none;
+}
+
 @media (max-width: 968px) {
   .sidebar {
     transform: translateX(-100%);
@@ -371,6 +375,14 @@
 
   .sidebar.closed ~ .main-content {
     margin-left: 0;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 99;
   }
 
   .search-box {
