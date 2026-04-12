@@ -94,7 +94,7 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
     { href: "/inventory",                label: "Inventory",         icon: <Package size={18}/> },
     { href: "/dashboard/analytics",      label: "Analytics",         icon: <BarChart3 size={18}/> },
     { href: "/predictions",              label: "Predictions",       icon: <Brain size={18}/> },
-    { href: "/reports",                  label: "Reports",           icon: <FileText size={18}/> },
+    // { href: "/reports",               label: "Reports",           icon: <FileText size={18}/> },
   ];
 
   const adminNav: NavItem[] = [
