@@ -120,8 +120,10 @@ export default function PredictionsPage() {
     0
   );
   const avgAccuracy = trainedFamilies.length
-    ? trainedFamilies.reduce((s, f) => s + (f.metrics?.mape != null ? (1 - f.metrics.mape) * 100 : 0), 0) /
-      trainedFamilies.length
+    ? trainedFamilies.reduce((s, f) => {
+        const mape = f.metrics?.MAPE ?? f.metrics?.mape;
+        return s + (mape != null ? Math.max(0, 100 - mape) : 0);
+      }, 0) / trainedFamilies.length
     : 0;
 
   // Chart data for selected family
@@ -314,10 +316,10 @@ export default function PredictionsPage() {
                         {f.trained ? `${totalPred.toLocaleString()} units` : "—"}
                       </td>
                       <td className="numeric-cell">
-                        {f.metrics?.mae != null ? f.metrics.mae.toFixed(1) : "—"}
+                        {(f.metrics?.MAE ?? f.metrics?.mae) != null ? (f.metrics.MAE ?? f.metrics.mae).toFixed(1) : "—"}
                       </td>
                       <td className="numeric-cell">
-                        {f.metrics?.rmse != null ? f.metrics.rmse.toFixed(1) : "—"}
+                        {(f.metrics?.RMSE ?? f.metrics?.rmse) != null ? (f.metrics.RMSE ?? f.metrics.rmse).toFixed(1) : "—"}
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: 8 }}>
