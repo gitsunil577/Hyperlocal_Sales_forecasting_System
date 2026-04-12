@@ -24,19 +24,55 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
     typeof window !== "undefined" ? window.innerWidth > 968 : true
   );
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [serverStarting, setServerStarting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const mounted = status !== "loading";
   const role = (session?.user?.role ?? "vendor") as "vendor" | "admin";
   const userEmail = session?.user?.email ?? "user@company.com";
 
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
   useEffect(() => {
-    apiClient.healthCheck()
-      .then(() => setBackendOnline(true))
-      .catch(() => setBackendOnline(false));
+    const checkHealth = () =>
+      apiClient.healthCheck()
+        .then(() => {
+          setBackendOnline(true);
+          setServerStarting(false);
+          stopPolling();
+        })
+        .catch(() => {
+          setBackendOnline(false);
+        });
+
+    checkHealth();
+    return () => stopPolling();
   }, []);
+
+  // Start polling when we detect offline
+  useEffect(() => {
+    if (backendOnline === false && !pollRef.current) {
+      setServerStarting(true);
+      // Wake HF Space by polling every 8s
+      pollRef.current = setInterval(() => {
+        apiClient.healthCheck()
+          .then(() => {
+            setBackendOnline(true);
+            setServerStarting(false);
+            stopPolling();
+          })
+          .catch(() => { /* still starting */ });
+      }, 8000);
+    }
+    if (backendOnline === true) {
+      stopPolling();
+    }
+  }, [backendOnline]);
 
   // Close notification dropdown on outside click
   useEffect(() => {
@@ -222,7 +258,7 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
                       marginLeft: "auto", fontSize: 12, fontWeight: 700,
                       color: backendOnline ? "#16a34a" : "#dc2626",
                     }}>
-                      {backendOnline === null ? "Checking..." : backendOnline ? "Online" : "Offline"}
+                      {backendOnline === null ? "Checking…" : backendOnline ? "Online" : serverStarting ? "Starting…" : "Offline"}
                     </span>
                   </div>
                   <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid #f8fafc" }}>
@@ -254,18 +290,31 @@ export default function ProtectedShell({ children }: { children: React.ReactNode
             style={{
               margin: "12px 16px 0",
               padding: "10px 16px",
-              background: "#fef3c7",
-              border: "1px solid #fde68a",
+              background: serverStarting ? "#eff6ff" : "#fef3c7",
+              border: `1px solid ${serverStarting ? "#bfdbfe" : "#fde68a"}`,
               borderRadius: 10,
               display: "flex",
               alignItems: "center",
               gap: 8,
               fontWeight: 600,
               fontSize: 13,
-              color: "#92400e",
+              color: serverStarting ? "#1d4ed8" : "#92400e",
             }}
           >
-            Backend server is offline. Start the Flask server on port 5000 for live data.
+            {serverStarting ? (
+              <>
+                <span style={{
+                  display: "inline-block", width: 13, height: 13, border: "2px solid #93c5fd",
+                  borderTopColor: "#1d4ed8", borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite", flexShrink: 0,
+                }} />
+                Server is starting up, please wait… (Hugging Face cold start may take ~30s)
+              </>
+            ) : (
+              <>
+                ⚠ Backend server is offline. Attempting to wake up…
+              </>
+            )}
           </div>
         )}
 

@@ -35,7 +35,6 @@ import "./salesdashboard.css";
 import { apiClient } from "@/lib/api-client";
 import { getDisplayName } from "@/lib/product-mapping";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
-import ErrorBanner from "@/app/components/ErrorBanner";
 
 /* ─── KPI Card (horizontal compact) ──────────────── */
 type KpiCardProps = {
@@ -84,7 +83,6 @@ const fmtK = (v: number) =>
 export default function SalesDashboard() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [recentSales, setRecentSales] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; units: number }[]>([]);
   const [productFamilies, setProductFamilies] = useState<string[]>([]);
@@ -94,7 +92,6 @@ export default function SalesDashboard() {
   const fetchDashboardData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      setError(null);
 
       const [productsResp, summaryResp] = await Promise.all([
         apiClient.getProducts(),
@@ -139,8 +136,8 @@ export default function SalesDashboard() {
 
       const familySales = await Promise.all(familySalesPromises);
       setTopProducts(familySales.sort((a, b) => b.units - a.units).slice(0, 5));
-    } catch (err: any) {
-      setError(err.message || "Failed to load dashboard data. Is the backend running?");
+    } catch {
+      // Backend offline — shell banner already notifies user; show empty dashboard silently
     } finally {
       if (!silent) setLoading(false);
     }
@@ -190,7 +187,6 @@ export default function SalesDashboard() {
   const BAR_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"];
 
   if (loading) return <LoadingSpinner message="Loading dashboard data…" />;
-  if (error) return <ErrorBanner message={error} onRetry={fetchDashboardData} />;
 
   const selectedName = getDisplayName(selectedFamily);
 
